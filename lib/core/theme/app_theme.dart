@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  static const Color sageGreen = Color(0xFF2E6F40);
+  static const Color primaryTeal = Color(0xFF34A99D);
+  static const Color secondaryTeal = Color(0xFF458393);
 
   static ThemeData get light {
-    final colorScheme = ColorScheme.fromSeed(seedColor: sageGreen);
+    final colorScheme = ColorScheme.fromSeed(seedColor: primaryTeal).copyWith(
+      primary: primaryTeal,
+      secondary: secondaryTeal,
+      onPrimary: Colors.white,
+      onSecondary: Colors.white,
+    );
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
