@@ -31,16 +31,25 @@ class _POSMainScreenState extends State<POSMainScreen> {
     return Scaffold(
       drawer: _BuildDrawer(),
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image(
+            const Image(
               image: AssetImage('assets/images/icon.png'),
               width: 28,
               height: 28,
             ),
-            SizedBox(width: 10),
-            Text('Aksy POS'),
+            const SizedBox(width: 10),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Aplikasi Kasir Easy',
+                  maxLines: 1,
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+            ),
           ],
         ),
         actions: [
@@ -250,13 +259,17 @@ class _BuildDrawer extends StatelessWidget {
                     height: 40,
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    'Aksy POS',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w800,
+                    Flexible(
+                      child: Text(
+                        'Aplikasi Kasir Easy',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(height: 4),

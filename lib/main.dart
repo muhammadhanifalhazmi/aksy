@@ -19,7 +19,7 @@ class AksyApp extends StatelessWidget {
       child: CartScope(
         notifier: CartProvider(),
         child: MaterialApp(
-          title: 'Aksy POS',
+          title: 'Aplikasi Kasir Easy',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           home: const POSMainScreen(),
