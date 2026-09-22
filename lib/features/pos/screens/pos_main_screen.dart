@@ -31,7 +31,18 @@ class _POSMainScreenState extends State<POSMainScreen> {
     return Scaffold(
       drawer: _BuildDrawer(),
       appBar: AppBar(
-        title: const Text('Aksy POS'),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image(
+              image: AssetImage('assets/images/icon.png'),
+              width: 28,
+              height: 28,
+            ),
+            SizedBox(width: 10),
+            Text('Aksy POS'),
+          ],
+        ),
         actions: [
           IconButton(
             onPressed: () => _openCartDrawer(context, cart),
@@ -231,12 +242,22 @@ class _BuildDrawer extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Aksy POS',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w800,
-                ),
+              Row(
+                children: [
+                  const Image(
+                    image: AssetImage('assets/images/icon.png'),
+                    width: 40,
+                    height: 40,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Aksy POS',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               Text(
