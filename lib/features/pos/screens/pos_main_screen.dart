@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/widgets/barcode_scanner_sheet.dart';
+import '../../cash_flow/screens/cash_flow_screen.dart';
+import '../../debt/screens/debt_screen.dart';
 import '../../inventory/screens/inventory_screen.dart';
-import '../data/seed_data.dart';
+import '../../reports/screens/reports_screen.dart';
+import '../../shift/screens/shift_screen.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
+import 'receipt_preview_dialog.dart';
 
 class POSMainScreen extends StatefulWidget {
   const POSMainScreen({super.key});
@@ -16,12 +22,14 @@ class POSMainScreen extends StatefulWidget {
 }
 
 class _POSMainScreenState extends State<POSMainScreen> {
-  String _selectedCategory = SeedData.categories.first;
+  String _selectedCategory = 'Semua';
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
     final cart = CartScope.of(context);
     return Scaffold(
+      drawer: _BuildDrawer(),
       appBar: AppBar(
         title: const Text('Aksy POS'),
         actions: [
@@ -36,9 +44,7 @@ class _POSMainScreenState extends State<POSMainScreen> {
           ),
           IconButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const InventoryScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const InventoryScreen()),
             ),
             tooltip: 'Inventori',
             icon: const Icon(Icons.inventory_2_outlined),
@@ -47,14 +53,14 @@ class _POSMainScreenState extends State<POSMainScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final products = SeedData.productsByCategory(_selectedCategory);
+          final products = _filteredProducts();
           final isWide = constraints.maxWidth >= 820;
           if (isWide) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(child: _buildProductArea(products)),
-                _CartPanel(width: 370),
+                _CartPanel(width: 380),
               ],
             );
           }
@@ -70,14 +76,52 @@ class _POSMainScreenState extends State<POSMainScreen> {
     );
   }
 
+  List<Product> _filteredProducts() {
+    final store = AppScope.of(context);
+    final query = _query.trim().toLowerCase();
+    final products = store.products.where((p) {
+      if (query.isNotEmpty) {
+        final matchesName = p.name.toLowerCase().contains(query);
+        final matchesBarcode = (p.barcode ?? '').contains(query);
+        if (!matchesName && !matchesBarcode) return false;
+      }
+      if (_selectedCategory != 'Semua' && p.category != _selectedCategory) {
+        return false;
+      }
+      return true;
+    }).toList();
+    return products;
+  }
+
   Widget _buildProductArea(List<Product> products) {
+    final store = AppScope.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: TextField(
+            onChanged: (value) => setState(() => _query = value),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) => _addByBarcode(value),
+            decoration: InputDecoration(
+              hintText: 'Cari produk atau barcode...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                onPressed: _openBarcodeScanner,
+                tooltip: 'Scan barcode',
+                icon: const Icon(Icons.qr_code_scanner),
+              ),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ),
         _CategoryFilter(
           selected: _selectedCategory,
           onSelected: (category) =>
               setState(() => _selectedCategory = category),
+          categories: _categories(store),
         ),
         Expanded(
           child: GridView.builder(
@@ -86,7 +130,7 @@ class _POSMainScreenState extends State<POSMainScreen> {
               maxCrossAxisExtent: 150,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 0.78,
+              childAspectRatio: 0.72,
             ),
             itemCount: products.length,
             itemBuilder: (context, index) {
@@ -96,6 +140,45 @@ class _POSMainScreenState extends State<POSMainScreen> {
         ),
       ],
     );
+  }
+
+  List<String> _categories(AppStore store) {
+    return ['Semua', ...store.categories];
+  }
+
+  Future<void> _openBarcodeScanner() async {
+    final store = AppScope.of(context);
+    final cart = CartScope.of(context);
+    final product = await showBarcodeScanner(
+      context,
+      products: store.products,
+    );
+    if (product == null || !mounted) return;
+    _addToCart(cart, product);
+  }
+
+  void _addByBarcode(String query) {
+    final store = AppScope.of(context);
+    final cart = CartScope.of(context);
+    final product = store.productByBarcode(query);
+    if (product != null) {
+      _addToCart(cart, product);
+    }
+  }
+
+  void _addToCart(CartProvider cart, Product product) {
+    if (product.stock <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${product.name} stok habis')),
+      );
+      return;
+    }
+    cart.addItem(product, availableStock: product.stock);
+    if (cart.quantityOf(product.id) >= product.stock) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Stok ${product.name} mencapai batas maksimal')),
+      );
+    }
   }
 
   void _openCartDrawer(BuildContext context, CartProvider cart) {
@@ -108,15 +191,109 @@ class _POSMainScreenState extends State<POSMainScreen> {
   }
 }
 
+class _BuildDrawer extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final store = AppScope.of(context);
+    return NavigationDrawer(
+      onDestinationSelected: (index) {
+        final navigator = Navigator.of(context);
+        navigator.pop();
+        switch (index) {
+          case 0:
+            break;
+          case 1:
+            navigator.push(
+              MaterialPageRoute(builder: (_) => const InventoryScreen()),
+            );
+          case 2:
+            navigator.push(
+              MaterialPageRoute(builder: (_) => const CashFlowScreen()),
+            );
+          case 3:
+            navigator.push(
+              MaterialPageRoute(builder: (_) => const DebtScreen()),
+            );
+          case 4:
+            navigator.push(
+              MaterialPageRoute(builder: (_) => const ShiftScreen()),
+            );
+          case 5:
+            navigator.push(
+              MaterialPageRoute(builder: (_) => const ReportsScreen()),
+            );
+        }
+      },
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Aksy POS',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                store.activeShift == null
+                    ? 'Shift belum dibuka'
+                    : 'Shift ${store.activeShift!.id} aktif',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: store.activeShift == null
+                      ? theme.colorScheme.outline
+                      : theme.colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.point_of_sale),
+          label: Text('POS'),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.inventory_2_outlined),
+          label: Text('Inventori'),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.account_balance_wallet_outlined),
+          label: Text('Kas Masuk / Keluar'),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.receipt_long_outlined),
+          label: Text('Hutang & Piutang'),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.history),
+          label: Text('Shift Kasir'),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.summarize_outlined),
+          label: Text('Laporan'),
+        ),
+      ],
+    );
+  }
+}
+
 class _CategoryFilter extends StatelessWidget {
-  const _CategoryFilter({required this.selected, required this.onSelected});
+  const _CategoryFilter({
+    required this.selected,
+    required this.onSelected,
+    required this.categories,
+  });
 
   final String selected;
   final ValueChanged<String> onSelected;
+  final List<String> categories;
 
   @override
   Widget build(BuildContext context) {
-    final categories = SeedData.categories;
     return SizedBox(
       height: 56,
       child: ListView.separated(
@@ -154,78 +331,130 @@ class _ProductCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cart = CartScope.of(context);
     final qty = cart.quantityOf(product.id);
+    final outOfStock = product.stock <= 0;
     return Material(
       color: theme.colorScheme.surface,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => cart.addItem(product),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    height: 56,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer
-                          .withValues(alpha: 0.45),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      product.icon,
-                      size: 32,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    product.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    CurrencyFormatter.formatIDR(product.price),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (qty > 0)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '$qty',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
+        onTap: outOfStock ? null : () => _registerTap(context, cart),
+        child: Opacity(
+          opacity: outOfStock ? 0.55 : 1,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: constraints.maxWidth,
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              height: 52,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primaryContainer
+                                    .withValues(alpha: 0.45),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                product.icon,
+                                size: 32,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              product.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              CurrencyFormatter.formatIDR(product.price),
+                              maxLines: 1,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (product.hasWholesaleTier) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Grosir dari ${product.minWholesaleQty} pcs',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 2),
+                            Text(
+                              outOfStock
+                                  ? 'Stok habis'
+                                  : 'Stok ${product.stock}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: outOfStock
+                                    ? theme.colorScheme.error
+                                    : theme.colorScheme.outline,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (qty > 0)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '$qty',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-          ],
+              );
+            },
+          ),
         ),
       ),
     );
+  }
+
+  void _registerTap(BuildContext context, CartProvider cart) {
+    if (product.stock <= 0) return;
+    cart.addItem(product, availableStock: product.stock);
+    if (cart.quantityOf(product.id) >= product.stock) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Stok ${product.name} mencapai batas maksimal')),
+      );
+    }
   }
 }
 
@@ -238,6 +467,7 @@ class _CartPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cart = CartScope.of(context);
+    final store = AppScope.of(context);
     return Material(
       color: theme.colorScheme.surfaceContainerLow,
       child: SizedBox(
@@ -277,7 +507,7 @@ class _CartPanel extends StatelessWidget {
                           _CartItemTile(item: cart.items[index]),
                     ),
             ),
-            _CheckoutFooter(cart: cart),
+            _CheckoutFooter(cart: cart, store: store),
           ],
         ),
       ),
@@ -293,6 +523,7 @@ class _CartSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final store = AppScope.of(context);
     return SafeArea(
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.7,
@@ -330,7 +561,7 @@ class _CartSheet extends StatelessWidget {
                           _CartItemTile(item: cart.items[index]),
                     ),
             ),
-            _CheckoutFooter(cart: cart),
+            _CheckoutFooter(cart: cart, store: store),
           ],
         ),
       ),
@@ -347,6 +578,7 @@ class _CartItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cart = CartScope.of(context);
+    final store = AppScope.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
@@ -355,17 +587,28 @@ class _CartItemTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  item.product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        item.product.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (item.isWholesale) ...[
+                      const SizedBox(width: 6),
+                      _WholesaleTag(),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${CurrencyFormatter.formatIDR(item.product.price)} / pcs',
+                  '${CurrencyFormatter.formatIDR(item.unitPrice)} / pcs'
+                  '${item.isWholesale ? ' (grosir)' : ''}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -373,7 +616,10 @@ class _CartItemTile extends StatelessWidget {
               ],
             ),
           ),
-          _QtyStepper(item: item),
+          _QtyStepper(
+            item: item,
+            availableStock: store.stockOf(item.product.id),
+          ),
           const SizedBox(width: 12),
           SizedBox(
             width: 96,
@@ -401,15 +647,38 @@ class _CartItemTile extends StatelessWidget {
   }
 }
 
+class _WholesaleTag extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        'grosir',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _QtyStepper extends StatelessWidget {
-  const _QtyStepper({required this.item});
+  const _QtyStepper({required this.item, required this.availableStock});
 
   final CartItem item;
+  final int availableStock;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cart = CartScope.of(context);
+    final atCap = item.quantity >= availableStock;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -429,7 +698,12 @@ class _QtyStepper extends StatelessWidget {
         ),
         _StepButton(
           icon: Icons.add,
-          onTap: () => cart.increment(item.product.id),
+          onTap: atCap
+              ? null
+              : () => cart.increment(
+                    item.product.id,
+                    availableStock: availableStock,
+                  ),
         ),
       ],
     );
@@ -440,7 +714,7 @@ class _StepButton extends StatelessWidget {
   const _StepButton({required this.icon, required this.onTap});
 
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -453,7 +727,9 @@ class _StepButton extends StatelessWidget {
         child: Icon(
           icon,
           size: 18,
-          color: theme.colorScheme.primary,
+          color: onTap == null
+              ? theme.colorScheme.outlineVariant
+              : theme.colorScheme.primary,
         ),
       ),
     );
@@ -489,9 +765,10 @@ class _EmptyCart extends StatelessWidget {
 }
 
 class _CheckoutFooter extends StatelessWidget {
-  const _CheckoutFooter({required this.cart});
+  const _CheckoutFooter({required this.cart, required this.store});
 
   final CartProvider cart;
+  final AppStore store;
 
   @override
   Widget build(BuildContext context) {
@@ -545,7 +822,7 @@ class _CheckoutFooter extends StatelessWidget {
           FilledButton.icon(
             onPressed: cart.isEmpty
                 ? null
-                : () => _showPaymentDialog(context, cart),
+                : () => _showPaymentDialog(context, cart, store),
             icon: const Icon(Icons.payments_outlined),
             label: Text('Bayar ${CurrencyFormatter.formatIDR(cart.subtotal)}'),
           ),
@@ -594,7 +871,8 @@ class _BottomCartBar extends StatelessWidget {
                 ),
               ),
               FilledButton.icon(
-                onPressed: () => _showPaymentDialog(context, cart),
+                onPressed: () =>
+                    _showPaymentDialog(context, cart, AppScope.of(context)),
                 icon: const Icon(Icons.payments_outlined),
                 label: const Text('Bayar'),
               ),
@@ -606,23 +884,32 @@ class _BottomCartBar extends StatelessWidget {
   }
 }
 
-Future<void> _showPaymentDialog(BuildContext context, CartProvider cart) async {
-  final controller = TextEditingController(text: '${cart.subtotal}');
+Future<void> _showPaymentDialog(
+  BuildContext context,
+  CartProvider cart,
+  AppStore store,
+) async {
+  final screenContext = context;
+  final cashController = TextEditingController(text: '${cart.subtotal}');
+  final discountController = TextEditingController();
   final focusNode = FocusNode();
   var cash = cart.subtotal;
+  var discount = 0;
 
   Future<void> close() async {
     focusNode.dispose();
-    controller.dispose();
-    Navigator.of(context).pop();
+    cashController.dispose();
+    discountController.dispose();
+    Navigator.of(screenContext).pop();
   }
 
   await showDialog<void>(
     context: context,
     builder: (dialogContext) {
       final theme = Theme.of(dialogContext);
-      final difference = cash - cart.subtotal;
-      final isEnough = difference >= 0;
+      final total = cart.subtotal - discount;
+      final difference = cash - total;
+      final isEnough = difference >= 0 && cash > 0;
       return StatefulBuilder(
         builder: (context, setDialogState) {
           return SafeArea(
@@ -630,125 +917,157 @@ Future<void> _showPaymentDialog(BuildContext context, CartProvider cart) async {
               insetPadding: const EdgeInsets.symmetric(horizontal: 20),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                Text(
-                  'Pembayaran',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Total tagihan ${CurrencyFormatter.formatIDR(cart.subtotal)}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (value) {
-                    cash = int.tryParse(value) ?? 0;
-                    setDialogState(() {});
-                  },
-                  decoration: InputDecoration(
-                    labelText: 'Uang diterima',
-                    prefixText: 'Rp ',
-                    border: const OutlineInputBorder(),
-                    helperText: 'Tekan angka di bawah untuk isi cepat',
-                    helperMaxLines: 1,
-                  ),
-                ),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ActionChip(
-                      label: const Text('Uang Pas'),
-                      onPressed: () {
-                        cash = cart.subtotal;
-                        controller.text = '$cash';
-                        setDialogState(() {});
-                      },
-                    ),
-                    for (final amount in const [20000, 50000, 100000])
-                      ActionChip(
-                        label: Text(CurrencyFormatter.formatIDR(amount)),
-                        onPressed: () {
-                          cash = amount;
-                          controller.text = '$amount';
-                          setDialogState(() {});
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                     Text(
-                      isEnough ? 'Kembalian' : 'Kurang',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      CurrencyFormatter.formatIDR(difference.abs()),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: isEnough
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.error,
+                      'Pembayaran',
+                      style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: close,
-                        child: const Text('Batal'),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Total tagihan ${CurrencyFormatter.formatIDR(total)}'
+                      '${discount > 0 ? ' (diskon ${CurrencyFormatter.formatIDR(discount)})' : ''}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton(
-                        onPressed: isEnough && cash > 0
-                            ? () async {
-                                final order = cart.submitOrder(cash);
-                                await close();
-                                if (!dialogContext.mounted) return;
-                                ScaffoldMessenger.of(dialogContext)
-                                    .showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Transaksi ${order.id} selesai. '
-                                      'Kembalian ${CurrencyFormatter.formatIDR(order.change)}.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            : null,
-                        child: const Text('Bayar'),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: cashController,
+                      focusNode: focusNode,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      onChanged: (value) => setDialogState(
+                        () => cash = int.tryParse(value) ?? 0,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Uang diterima',
+                        prefixText: 'Rp ',
+                        border: const OutlineInputBorder(),
+                        helperText: 'Tekan angka di bawah untuk isi cepat',
+                        helperMaxLines: 1,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: discountController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      onChanged: (value) => setDialogState(
+                        () => discount = int.tryParse(value) ?? 0,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Diskon (Rp)',
+                        prefixText: 'Rp ',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ActionChip(
+                          label: const Text('Uang Pas'),
+                          onPressed: () {
+                            cash = total;
+                            cashController.text = '$cash';
+                            setDialogState(() {});
+                          },
+                        ),
+                        for (final amount in const [20000, 50000, 100000])
+                          ActionChip(
+                            label: Text(CurrencyFormatter.formatIDR(amount)),
+                            onPressed: () {
+                              cash = amount;
+                              cashController.text = '$amount';
+                              setDialogState(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isEnough ? 'Kembalian' : 'Kurang',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          CurrencyFormatter.formatIDR(difference.abs()),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: isEnough
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.error,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: close,
+                            child: const Text('Batal'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: FilledButton(
+                            onPressed: isEnough && cash >= total
+                                ? () async {
+                                    final order = cart.submitOrder(
+                                      cash,
+                                      store,
+                                      discount: discount,
+                                    );
+                                    await close();
+                                    if (!screenContext.mounted) return;
+                                    if (order.change > 0) {
+                                      ScaffoldMessenger.of(screenContext)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Kembalian ${CurrencyFormatter.formatIDR(order.change)}',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    if (screenContext.mounted) {
+                                      await showReceiptPreview(
+                                        screenContext,
+                                        order: order,
+                                        store: store,
+                                      );
+                                    }
+                                  }
+                                : null,
+                            child: const Text('Bayar'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
-                ),
-              ],
                 ),
               ),
             ),
-          );
+          ),
+        );
         },
       );
     },

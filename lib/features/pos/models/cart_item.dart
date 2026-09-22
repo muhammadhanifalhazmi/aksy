@@ -6,7 +6,17 @@ class CartItem {
   final Product product;
   final int quantity;
 
-  int get subtotal => product.price * quantity;
+  int get unitPrice => product.unitPriceFor(quantity);
+
+  bool get isWholesale => unitPrice != product.price;
+
+  int get subtotal => unitPrice * quantity;
+
+  int? get estimatedProfit {
+    final cost = product.costPrice;
+    if (cost == null) return null;
+    return (unitPrice - cost) * quantity;
+  }
 
   CartItem copyWith({int? quantity}) {
     return CartItem(product: product, quantity: quantity ?? this.quantity);
