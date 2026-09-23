@@ -145,11 +145,18 @@ void main() {
       expect(store.cashInOn(DateTime.now()), 6000);
     });
 
-    test('productByBarcode resolves seeded barcode', () {
-      final store = AppStore();
-      final product = store.productByBarcode('8991001234567');
-      expect(product, isNotNull);
-      expect(product!.name, 'Air Mineral');
+    test('productByBarcode resolves matching barcode', () {
+      final product = const Product(
+        id: 'p1',
+        name: 'Air Mineral',
+        price: 3000,
+        category: 'Minuman',
+        icon: Icons.water_drop,
+        stock: 50,
+        barcode: '8991001234567',
+      );
+      final store = AppStore(products: [product]);
+      expect(store.productByBarcode('8991001234567'), same(product));
       expect(store.productByBarcode('000'), isNull);
     });
 

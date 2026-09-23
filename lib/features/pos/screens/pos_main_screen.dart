@@ -144,19 +144,27 @@ class _POSMainScreenState extends State<POSMainScreen> {
           categories: _categories(store),
         ),
         Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 150,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 0.72,
-            ),
-            itemCount: products.length,
-            itemBuilder: (context, index) {
-              return _ProductCard(product: products[index]);
-            },
-          ),
+          child: products.isEmpty
+              ? _EmptyProducts(
+                  onAddPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const InventoryScreen(),
+                    ),
+                  ),
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 150,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.72,
+                  ),
+                  itemCount: products.length,
+                  itemBuilder: (context, index) {
+                    return _ProductCard(product: products[index]);
+                  },
+                ),
         ),
       ],
     );
@@ -350,6 +358,54 @@ class _CategoryFilter extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _EmptyProducts extends StatelessWidget {
+  const _EmptyProducts({required this.onAddPressed});
+
+  final VoidCallback onAddPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.inventory_2_outlined,
+              size: 64,
+              color: theme.colorScheme.primary.withValues(alpha: 0.4),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Belum ada produk',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tambahkan produk terlebih dahulu lewat menu Inventori '
+              'agar bisa dijual atau dipindai.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onAddPressed,
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Produk'),
+            ),
+          ],
+        ),
       ),
     );
   }

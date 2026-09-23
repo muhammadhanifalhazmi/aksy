@@ -2,13 +2,13 @@ import 'package:flutter/widgets.dart';
 
 import '../../features/cash_flow/models/cash_entry.dart';
 import '../../features/debt/models/debt.dart';
-import '../../features/pos/data/seed_data.dart';
 import '../../features/pos/models/order.dart';
 import '../../features/pos/models/product.dart';
 import '../../features/shift/models/shift_record.dart';
 
 class AppStore extends ChangeNotifier {
-  AppStore({List<Product>? products}) : _products = List.of(products ?? SeedData.products);
+  AppStore({List<Product>? products})
+      : _products = List.of(products ?? const <Product>[]);
 
   final List<Product> _products;
   final List<Order> _orders = [];
