@@ -14,6 +14,22 @@ extension DebtTypeLabel on DebtType {
 class DebtPayment {
   const DebtPayment({required this.id, required this.amount, required this.at});
 
+  factory DebtPayment.fromJson(Map<String, dynamic> json) {
+    return DebtPayment(
+      id: json['id'] as String,
+      amount: json['amount'] as int,
+      at: DateTime.parse(json['at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'amount': amount,
+      'at': at.toIso8601String(),
+    };
+  }
+
   final String id;
   final int amount;
   final DateTime at;
@@ -31,6 +47,39 @@ class Debt {
     this.paidAmount = 0,
     this.payments = const [],
   });
+
+  factory Debt.fromJson(Map<String, dynamic> json) {
+    final typeValue = json['type'] as String? ?? DebtType.receivable.name;
+    return Debt(
+      id: json['id'] as String,
+      type: DebtType.values.asNameMap()[typeValue] ?? DebtType.receivable,
+      partyName: json['partyName'] as String,
+      amount: json['amount'] as int,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      dueDate: json['dueDate'] == null
+          ? null
+          : DateTime.tryParse(json['dueDate'] as String),
+      note: json['note'] as String?,
+      paidAmount: json['paidAmount'] as int? ?? 0,
+      payments: (json['payments'] as List<dynamic>? ?? const [])
+          .map((e) => DebtPayment.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type.name,
+      'partyName': partyName,
+      'amount': amount,
+      'createdAt': createdAt.toIso8601String(),
+      'dueDate': dueDate?.toIso8601String(),
+      'note': note,
+      'paidAmount': paidAmount,
+      'payments': payments.map((p) => p.toJson()).toList(),
+    };
+  }
 
   final String id;
   final DebtType type;

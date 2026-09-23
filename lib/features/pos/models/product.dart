@@ -17,6 +17,44 @@ class Product {
     this.batchNumber,
   });
 
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      price: json['price'] as int,
+      category: json['category'] as String? ?? 'Umum',
+      icon: IconData(json['icon'] as int),
+      wholesalePrice: json['wholesalePrice'] as int?,
+      minWholesaleQty: json['minWholesaleQty'] as int?,
+      costPrice: json['costPrice'] as int?,
+      barcode: json['barcode'] as String?,
+      imagePath: json['imagePath'] as String?,
+      stock: json['stock'] as int? ?? 0,
+      expiryDate: json['expiryDate'] == null
+          ? null
+          : DateTime.tryParse(json['expiryDate'] as String),
+      batchNumber: json['batchNumber'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'price': price,
+      'category': category,
+      'icon': icon.codePoint,
+      'wholesalePrice': wholesalePrice,
+      'minWholesaleQty': minWholesaleQty,
+      'costPrice': costPrice,
+      'barcode': barcode,
+      'imagePath': imagePath,
+      'stock': stock,
+      'expiryDate': expiryDate?.toIso8601String(),
+      'batchNumber': batchNumber,
+    };
+  }
+
   final String id;
   final String name;
   final int price;

@@ -5,17 +5,21 @@ import 'core/theme/app_theme.dart';
 import 'features/pos/providers/cart_provider.dart';
 import 'features/splash/screens/splash_screen.dart';
 
-void main() {
-  runApp(const AksyApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final store = await AppStore.load();
+  runApp(AksyApp(store: store));
 }
 
 class AksyApp extends StatelessWidget {
-  const AksyApp({super.key});
+  const AksyApp({super.key, required this.store});
+
+  final AppStore store;
 
   @override
   Widget build(BuildContext context) {
     return AppScope(
-      store: AppStore(),
+      store: store,
       child: CartScope(
         notifier: CartProvider(),
         child: MaterialApp(

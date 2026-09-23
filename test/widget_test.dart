@@ -5,6 +5,7 @@ import 'package:aksy/features/pos/models/product.dart';
 import 'package:aksy/features/pos/providers/cart_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('CurrencyFormatter', () {
@@ -202,6 +203,46 @@ void main() {
       expect(closed.expectedCash, 105000);
       expect(closed.difference, 3000);
       expect(store.activeShift, isNull);
+    });
+  });
+
+  group('AppStore persistence', () {
+    test('round-trips all data through SharedPreferences', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      var store = AppStore.fromPrefs(prefs);
+
+      final product = _product(
+        id: 'p1',
+        name: 'Air Mineral',
+        price: 3000,
+        category: 'Minuman',
+        stock: 10,
+      );
+      store.addProduct(product);
+      store.openShift(50000);
+
+      final cart = CartProvider();
+      cart.addItem(product);
+      cart.submitOrder(10000, store);
+
+      store.addDebt(
+        Debt(
+          id: 'd1',
+          type: DebtType.receivable,
+          partyName: 'Budi',
+          amount: 50000,
+          createdAt: DateTime.now(),
+        ),
+      );
+
+      store = AppStore.fromPrefs(prefs);
+      expect(store.products.single.id, 'p1');
+      expect(store.stockOf('p1'), 9);
+      expect(store.orders.single.items.single.quantity, 1);
+      expect(store.cashEntries, hasLength(1));
+      expect(store.debts.single.partyName, 'Budi');
+      expect(store.activeShift, isNotNull);
     });
   });
 }

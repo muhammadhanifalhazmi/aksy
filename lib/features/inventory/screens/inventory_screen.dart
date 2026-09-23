@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -416,7 +417,30 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       imageQuality: 85,
     );
     if (picked == null || !mounted) return;
-    setState(() => _imagePath = picked.path);
+    final saved = await _copyImageToDocuments(picked.path);
+    if (!mounted) return;
+    setState(() => _imagePath = saved);
+  }
+
+  Future<String?> _copyImageToDocuments(String sourcePath) async {
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final imagesDir = Directory('${docs.path}/product_images');
+      if (!await imagesDir.exists()) {
+        await imagesDir.create(recursive: true);
+      }
+      final parts = sourcePath.split('.');
+      final ext = parts.isEmpty ? 'jpg' : parts.last.toLowerCase();
+      final safeExt = const {'jpg', 'jpeg', 'png', 'webp'}.contains(ext)
+          ? ext
+          : 'jpg';
+      final dest =
+          '${imagesDir.path}/P${DateTime.now().millisecondsSinceEpoch}.$safeExt';
+      await File(sourcePath).copy(dest);
+      return dest;
+    } catch (_) {
+      return sourcePath;
+    }
   }
 
   Future<void> _pickDate() async {

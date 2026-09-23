@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/cash_flow/models/cash_entry.dart';
 import '../../features/debt/models/debt.dart';
@@ -7,9 +10,29 @@ import '../../features/pos/models/product.dart';
 import '../../features/shift/models/shift_record.dart';
 
 class AppStore extends ChangeNotifier {
-  AppStore({List<Product>? products})
-      : _products = List.of(products ?? const <Product>[]);
+  AppStore({List<Product>? products, SharedPreferences? prefs})
+      : _prefs = prefs,
+        _products = List.of(products ?? const <Product>[]);
 
+  static const _kProducts = 'store.products';
+  static const _kOrders = 'store.orders';
+  static const _kCashEntries = 'store.cash_entries';
+  static const _kDebts = 'store.debts';
+  static const _kShifts = 'store.shifts';
+  static const _kActiveShift = 'store.active_shift';
+
+  static Future<AppStore> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    return AppStore.fromPrefs(prefs);
+  }
+
+  factory AppStore.fromPrefs(SharedPreferences prefs) {
+    final store = AppStore(prefs: prefs);
+    store._restore(prefs);
+    return store;
+  }
+
+  final SharedPreferences? _prefs;
   final List<Product> _products;
   final List<Order> _orders = [];
   final List<CashEntry> _cashEntries = [];
@@ -30,6 +53,76 @@ class AppStore extends ChangeNotifier {
       if (product.category.isNotEmpty) seen.add(product.category);
     }
     return List.unmodifiable(seen);
+  }
+
+  void _restore(SharedPreferences prefs) {
+    List<dynamic> decode(String key) {
+      final raw = prefs.getString(key);
+      if (raw == null || raw.isEmpty) return const [];
+      return jsonDecode(raw) as List<dynamic>;
+    }
+
+    _products.addAll(
+      decode(_kProducts)
+          .map((e) => Product.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+    _orders.addAll(
+      decode(_kOrders)
+          .map((e) => Order.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+    _cashEntries.addAll(
+      decode(_kCashEntries)
+          .map((e) => CashEntry.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+    _debts.addAll(
+      decode(_kDebts)
+          .map((e) => Debt.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+    _shifts.addAll(
+      decode(_kShifts)
+          .map((e) => ShiftRecord.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+    final activeRaw = prefs.getString(_kActiveShift);
+    if (activeRaw != null && activeRaw.isNotEmpty) {
+      _activeShift =
+          ShiftRecord.fromJson(jsonDecode(activeRaw) as Map<String, dynamic>);
+    }
+  }
+
+  void _save() {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    String encode(List<dynamic> list) => jsonEncode(list);
+
+    prefs.setString(
+      _kProducts,
+      encode(_products.map((p) => p.toJson()).toList()),
+    );
+    prefs.setString(
+      _kOrders,
+      encode(_orders.map((o) => o.toJson()).toList()),
+    );
+    prefs.setString(
+      _kCashEntries,
+      encode(_cashEntries.map((e) => e.toJson()).toList()),
+    );
+    prefs.setString(
+      _kDebts,
+      encode(_debts.map((d) => d.toJson()).toList()),
+    );
+    prefs.setString(
+      _kShifts,
+      encode(_shifts.map((s) => s.toJson()).toList()),
+    );
+    prefs.setString(
+      _kActiveShift,
+      _activeShift == null ? '' : jsonEncode(_activeShift!.toJson()),
+    );
   }
 
   Product? productById(String id) {
@@ -53,6 +146,7 @@ class AppStore extends ChangeNotifier {
 
   void addProduct(Product product) {
     _products.add(product);
+    _save();
     notifyListeners();
   }
 
@@ -60,6 +154,7 @@ class AppStore extends ChangeNotifier {
     final index = _products.indexWhere((p) => p.id == product.id);
     if (index < 0) return;
     _products[index] = product;
+    _save();
     notifyListeners();
   }
 
@@ -68,6 +163,7 @@ class AppStore extends ChangeNotifier {
     if (index < 0) return;
     final current = _products[index];
     _products[index] = current.copyWith(stock: stock);
+    _save();
     notifyListeners();
   }
 
@@ -93,6 +189,7 @@ class AppStore extends ChangeNotifier {
         createdAt: order.createdAt,
       ),
     );
+    _save();
     notifyListeners();
   }
 
@@ -166,11 +263,13 @@ class AppStore extends ChangeNotifier {
 
   void addCashEntry(CashEntry entry) {
     _cashEntries.add(entry);
+    _save();
     notifyListeners();
   }
 
   void addDebt(Debt debt) {
     _debts.add(debt);
+    _save();
     notifyListeners();
   }
 
@@ -203,6 +302,7 @@ class AppStore extends ChangeNotifier {
         createdAt: at,
       ),
     );
+    _save();
     notifyListeners();
   }
 
@@ -213,6 +313,7 @@ class AppStore extends ChangeNotifier {
       startingCash: startingCash,
     );
     _activeShift = shift;
+    _save();
     notifyListeners();
     return shift;
   }
@@ -247,6 +348,7 @@ class AppStore extends ChangeNotifier {
     );
     _shifts.add(closed);
     _activeShift = null;
+    _save();
     notifyListeners();
     return closed;
   }
