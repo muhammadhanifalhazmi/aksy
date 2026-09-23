@@ -11,6 +11,7 @@ class Product {
     this.minWholesaleQty,
     this.costPrice,
     this.barcode,
+    this.imagePath,
     this.stock = 0,
     this.expiryDate,
     this.batchNumber,
@@ -25,6 +26,7 @@ class Product {
   final int? minWholesaleQty;
   final int? costPrice;
   final String? barcode;
+  final String? imagePath;
   final int stock;
   final DateTime? expiryDate;
   final String? batchNumber;
@@ -59,6 +61,7 @@ class Product {
     int? minWholesaleQty,
     int? costPrice,
     String? barcode,
+    String? imagePath,
     int? stock,
     DateTime? expiryDate,
     String? batchNumber,
@@ -73,6 +76,7 @@ class Product {
       minWholesaleQty: minWholesaleQty ?? this.minWholesaleQty,
       costPrice: costPrice ?? this.costPrice,
       barcode: barcode ?? this.barcode,
+      imagePath: imagePath ?? this.imagePath,
       stock: stock ?? this.stock,
       expiryDate: expiryDate ?? this.expiryDate,
       batchNumber: batchNumber ?? this.batchNumber,

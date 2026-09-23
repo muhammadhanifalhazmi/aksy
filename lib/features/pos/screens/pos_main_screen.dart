@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -416,6 +418,13 @@ class _ProductCard extends StatelessWidget {
 
   final Product product;
 
+  Widget _thumbPlaceholder(ThemeData theme) {
+    return Container(
+      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+      child: Icon(product.icon, size: 32, color: theme.colorScheme.primary),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -445,18 +454,19 @@ class _ProductCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              height: 52,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primaryContainer
-                                    .withValues(alpha: 0.45),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                product.icon,
-                                size: 32,
-                                color: theme.colorScheme.primary,
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SizedBox(
+                                height: 52,
+                                width: double.infinity,
+                                child: product.imagePath != null
+                                    ? Image.file(
+                                        File(product.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            _thumbPlaceholder(theme),
+                                      )
+                                    : _thumbPlaceholder(theme),
                               ),
                             ),
                             const SizedBox(height: 8),

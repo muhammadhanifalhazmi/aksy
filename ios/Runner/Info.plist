@@ -43,6 +43,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Kamera digunakan untuk memindai barcode dan QR code produk.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Galeri digunakan untuk memilih foto produk.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

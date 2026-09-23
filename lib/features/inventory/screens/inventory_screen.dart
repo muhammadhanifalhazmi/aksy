@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -125,11 +128,91 @@ class _EmptyInventory extends StatelessWidget {
   }
 }
 
+class _ProductImagePicker extends StatelessWidget {
+  const _ProductImagePicker({
+    required this.imagePath,
+    required this.onGallery,
+    required this.onCamera,
+    required this.onRemove,
+  });
+
+  final String? imagePath;
+  final VoidCallback onGallery;
+  final VoidCallback onCamera;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            width: 140,
+            height: 140,
+            child: imagePath != null
+                ? Image.file(
+                    File(imagePath!),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _placeholder(theme),
+                  )
+                : _placeholder(theme),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onGallery,
+              icon: const Icon(Icons.photo_library_outlined, size: 18),
+              label: const Text('Galeri'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onCamera,
+              icon: const Icon(Icons.photo_camera_outlined, size: 18),
+              label: const Text('Kamera'),
+            ),
+            if (onRemove != null)
+              TextButton.icon(
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Hapus'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _placeholder(ThemeData theme) {
+    return Container(
+      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+      child: Icon(
+        Icons.image_outlined,
+        size: 48,
+        color: theme.colorScheme.primary,
+      ),
+    );
+  }
+}
+
 class _InventoryCard extends StatelessWidget {
   const _InventoryCard({required this.product, required this.onTap});
 
   final Product product;
   final VoidCallback onTap;
+
+  Widget _thumbPlaceholder(ThemeData theme) {
+    return Container(
+      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+      child: Icon(product.icon, color: theme.colorScheme.primary),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -147,15 +230,19 @@ class _InventoryCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
+              SizedBox(
                 width: 46,
                 height: 46,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer
-                      .withValues(alpha: 0.45),
+                child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
+                  child: product.imagePath != null
+                      ? Image.file(
+                          File(product.imagePath!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => _thumbPlaceholder(theme),
+                        )
+                      : _thumbPlaceholder(theme),
                 ),
-                child: Icon(product.icon, color: theme.colorScheme.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -281,6 +368,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late final TextEditingController _batchNumber;
   DateTime? _expiryDate;
   IconData _icon = Icons.inventory_2;
+  String? _imagePath;
 
   bool get _hasWholesale => _wholesalePrice.text.isNotEmpty;
 
@@ -303,6 +391,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _batchNumber = TextEditingController(text: p?.batchNumber ?? '');
     _expiryDate = p?.expiryDate;
     _icon = p?.icon ?? _icon;
+    _imagePath = p?.imagePath;
   }
 
   @override
@@ -317,6 +406,17 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _stock.dispose();
     _batchNumber.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      maxWidth: 1200,
+      maxHeight: 1200,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _imagePath = picked.path);
   }
 
   Future<void> _pickDate() async {
@@ -358,6 +458,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       minWholesaleQty: minQty,
       costPrice: int.tryParse(_costPrice.text.trim()),
       barcode: _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
+      imagePath: _imagePath,
       stock: int.tryParse(_stock.text.trim()) ?? 0,
       expiryDate: _expiryDate,
       batchNumber: _batchNumber.text.trim().isEmpty
@@ -397,6 +498,17 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                   isNew ? 'Tambah Produk' : 'Edit Produk',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: _ProductImagePicker(
+                    imagePath: _imagePath,
+                    onGallery: () => _pickImage(ImageSource.gallery),
+                    onCamera: () => _pickImage(ImageSource.camera),
+                    onRemove: _imagePath == null
+                        ? null
+                        : () => setState(() => _imagePath = null),
                   ),
                 ),
                 const SizedBox(height: 16),
