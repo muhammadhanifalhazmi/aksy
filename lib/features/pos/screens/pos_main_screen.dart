@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
-import '../../../core/widgets/barcode_scanner_sheet.dart';
+import '../../../core/widgets/barcode_scanner_screen.dart';
 import '../../cash_flow/screens/cash_flow_screen.dart';
 import '../../debt/screens/debt_screen.dart';
 import '../../inventory/screens/inventory_screen.dart';
