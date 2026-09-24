@@ -6,6 +6,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/status_chip.dart';
+import 'report_export_sheet.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -42,6 +43,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
             onPressed: _pickDate,
             tooltip: 'Pilih Tanggal',
             icon: const Icon(Icons.calendar_month_outlined),
+          ),
+          IconButton(
+            onPressed: _openExportSheet,
+            tooltip: 'Unduh Laporan',
+            icon: const Icon(Icons.file_download_outlined),
           ),
         ],
       ),
@@ -203,6 +209,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
       lastDate: DateTime.now(),
     );
     if (picked != null) setState(() => _selectedDate = picked);
+  }
+
+  void _openExportSheet() {
+    final store = AppScope.of(context);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => ReportExportSheet(store: store),
+    );
   }
 }
 

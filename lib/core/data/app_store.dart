@@ -261,6 +261,138 @@ class AppStore extends ChangeNotifier {
     return result;
   }
 
+  List<Order> ordersBetween(DateTime start, DateTime endExclusive) {
+    return _orders
+        .where(
+          (o) => !o.createdAt.isBefore(start) && o.createdAt.isBefore(endExclusive),
+        )
+        .toList();
+  }
+
+  int omzetBetween(DateTime start, DateTime endExclusive) {
+    return ordersBetween(start, endExclusive).fold(0, (sum, o) => sum + o.total);
+  }
+
+  int transactionCountBetween(DateTime start, DateTime endExclusive) {
+    return ordersBetween(start, endExclusive).length;
+  }
+
+  int itemsSoldBetween(DateTime start, DateTime endExclusive) {
+    return ordersBetween(start, endExclusive).fold(
+      0,
+      (sum, o) => sum + o.items.fold(0, (s, i) => s + i.quantity),
+    );
+  }
+
+  int estimatedProfitBetween(DateTime start, DateTime endExclusive) {
+    var total = 0;
+    for (final order in ordersBetween(start, endExclusive)) {
+      for (final item in order.items) {
+        total += item.estimatedProfit ?? 0;
+      }
+    }
+    return total;
+  }
+
+  int cashInBetween(DateTime start, DateTime endExclusive) {
+    return _cashEntries
+        .where(
+          (e) =>
+              e.type == CashFlowType.cashIn &&
+              !e.createdAt.isBefore(start) &&
+              e.createdAt.isBefore(endExclusive),
+        )
+        .fold(0, (sum, e) => sum + e.amount);
+  }
+
+  int cashOutBetween(DateTime start, DateTime endExclusive) {
+    return _cashEntries
+        .where(
+          (e) =>
+              e.type == CashFlowType.cashOut &&
+              !e.createdAt.isBefore(start) &&
+              e.createdAt.isBefore(endExclusive),
+        )
+        .fold(0, (sum, e) => sum + e.amount);
+  }
+
+  List<MapEntry<Product, int>> topProductsBetween(
+    DateTime start,
+    DateTime endExclusive, {
+    int limit = 10,
+  }) {
+    final totals = <String, int>{};
+    for (final order in ordersBetween(start, endExclusive)) {
+      for (final item in order.items) {
+        totals.update(
+          item.product.id,
+          (value) => value + item.quantity,
+          ifAbsent: () => item.quantity,
+        );
+      }
+    }
+    final sorted = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final result = <MapEntry<Product, int>>[];
+    for (final entry in sorted.take(limit)) {
+      final product = productById(entry.key);
+      if (product != null) result.add(MapEntry(product, entry.value));
+    }
+    return result;
+  }
+
+  List<MapEntry<String, int>> categoryRevenueBetween(
+    DateTime start,
+    DateTime endExclusive,
+  ) {
+    final totals = <String, int>{};
+    for (final order in ordersBetween(start, endExclusive)) {
+      for (final item in order.items) {
+        totals.update(
+          item.product.category,
+          (value) => value + item.subtotal,
+          ifAbsent: () => item.subtotal,
+        );
+      }
+    }
+    final sorted = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted;
+  }
+
+  List<DailyAggregate> dailyAggregatesBetween(
+    DateTime start,
+    DateTime endExclusive,
+  ) {
+    final result = <DailyAggregate>[];
+    var cursor = DateTime(start.year, start.month, start.day);
+    while (cursor.isBefore(endExclusive)) {
+      final next = DateTime(cursor.year, cursor.month, cursor.day + 1);
+      final dayOrders = ordersBetween(cursor, next);
+      var profit = 0;
+      var items = 0;
+      for (final order in dayOrders) {
+        for (final item in order.items) {
+          profit += item.estimatedProfit ?? 0;
+          items += item.quantity;
+        }
+      }
+      result.add(
+        DailyAggregate(
+          date: cursor,
+          transactions: dayOrders.length,
+          items: items,
+          omzet: dayOrders.fold(0, (sum, o) => sum + o.total),
+          profit: profit,
+          cashIn: cashInBetween(cursor, next),
+          cashOut: cashOutBetween(cursor, next),
+        ),
+      );
+      cursor = next;
+    }
+    return result;
+  }
+
   void addCashEntry(CashEntry entry) {
     _cashEntries.add(entry);
     _save();
@@ -351,6 +483,38 @@ class AppStore extends ChangeNotifier {
     _save();
     notifyListeners();
     return closed;
+  }
+}
+
+class DailyAggregate {
+  const DailyAggregate({
+    required this.date,
+    required this.transactions,
+    required this.items,
+    required this.omzet,
+    required this.profit,
+    required this.cashIn,
+    required this.cashOut,
+  });
+
+  final DateTime date;
+  final int transactions;
+  final int items;
+  final int omzet;
+  final int profit;
+  final int cashIn;
+  final int cashOut;
+
+  DailyAggregate operator +(covariant DailyAggregate other) {
+    return DailyAggregate(
+      date: other.date,
+      transactions: transactions + other.transactions,
+      items: items + other.items,
+      omzet: omzet + other.omzet,
+      profit: profit + other.profit,
+      cashIn: cashIn + other.cashIn,
+      cashOut: cashOut + other.cashOut,
+    );
   }
 }
 
