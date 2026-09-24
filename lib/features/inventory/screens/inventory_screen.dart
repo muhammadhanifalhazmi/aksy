@@ -6,8 +6,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/data/app_store.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/status_chip.dart';
 import '../../pos/models/product.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -61,7 +64,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           Expanded(
             child: products.isEmpty
-                ? const _EmptyInventory()
+                ? const EmptyState(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Belum ada produk yang cocok',
+                  )
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                     itemCount: products.length,
@@ -96,34 +102,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
       builder: (_) => _ProductFormSheet(
         store: store,
         product: product,
-      ),
-    );
-  }
-}
-
-class _EmptyInventory extends StatelessWidget {
-  const _EmptyInventory();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.inventory_2_outlined,
-            size: 48,
-            color: theme.colorScheme.outlineVariant,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Belum ada produk yang cocok',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -220,11 +198,14 @@ class _InventoryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final out = product.stock <= 0;
     final warning = product.isExpiringSoon();
-    return Material(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
+    final stockColor = out
+        ? theme.colorScheme.error
+        : product.stock <= 5
+            ? AppTheme.warningOrange
+            : theme.colorScheme.primary;
+    return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radius),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -260,7 +241,10 @@ class _InventoryCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        _StockChip(stock: product.stock, out: out),
+                        StatusChip(
+                          label: out ? 'Habis' : 'Stok ${product.stock}',
+                          color: stockColor,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -309,37 +293,6 @@ class _InventoryCard extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StockChip extends StatelessWidget {
-  const _StockChip({required this.stock, required this.out});
-
-  final int stock;
-  final bool out;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = out
-        ? theme.colorScheme.error
-        : stock <= 5
-            ? Colors.orange
-            : theme.colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        out ? 'Habis' : 'Stok $stock',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );

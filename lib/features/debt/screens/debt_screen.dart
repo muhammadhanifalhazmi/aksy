@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/data/app_store.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/status_chip.dart';
+import '../../../core/widgets/summary_card.dart';
 import '../models/debt.dart';
 
 class DebtScreen extends StatefulWidget {
@@ -18,7 +22,6 @@ class _DebtScreenState extends State<DebtScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final store = AppScope.of(context);
     final debts = store.debts
         .where((d) => d.type == _selected)
@@ -63,45 +66,20 @@ class _DebtScreenState extends State<DebtScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(
-                      _selected == DebtType.receivable
-                          ? Icons.savings_outlined
-                          : Icons.wallet_outlined,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Sisa tagihan ${_selected.label}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.outline,
-                            ),
-                          ),
-                          Text(
-                            CurrencyFormatter.formatIDR(outstanding),
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            child: SummaryCard(
+              icon: _selected == DebtType.receivable
+                  ? Icons.savings_outlined
+                  : Icons.wallet_outlined,
+              label: 'Sisa tagihan ${_selected.label}',
+              value: CurrencyFormatter.formatIDR(outstanding),
             ),
           ),
           Expanded(
             child: debts.isEmpty
-                ? const _EmptyDebt()
+                ? const EmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Belum ada catatan',
+                  )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: debts.length,
@@ -139,34 +117,6 @@ class _DebtScreenState extends State<DebtScreen> {
   }
 }
 
-class _EmptyDebt extends StatelessWidget {
-  const _EmptyDebt();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 48,
-            color: theme.colorScheme.outlineVariant,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Belum ada catatan',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _DebtCard extends StatelessWidget {
   const _DebtCard({required this.debt, required this.onTap});
 
@@ -178,7 +128,7 @@ class _DebtCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppTheme.radius),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -196,45 +146,19 @@ class _DebtCard extends StatelessWidget {
                     ),
                   ),
                   if (debt.isPaid)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        'Lunas',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    const StatusChip(
+                      label: 'Lunas',
+                      color: AppTheme.successGreen,
                     )
                   else if (debt.isOverdue)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.error.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        'Jatuh tempo',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.error,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    StatusChip(
+                      label: 'Jatuh tempo',
+                      color: theme.colorScheme.error,
                     )
                   else
-                    _StatusChip(
+                    const StatusChip(
                       label: 'Belum lunas',
-                      color: Colors.orange,
+                      color: AppTheme.warningOrange,
                     ),
                 ],
               ),
@@ -266,32 +190,6 @@ class _DebtCard extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -530,7 +428,10 @@ class _DebtDetailSheetState extends State<_DebtDetailSheet> {
                   ),
                 ),
                 if (debt.isPaid)
-                  const _StatusChip(label: 'Lunas', color: Colors.green),
+                  const StatusChip(
+                    label: 'Lunas',
+                    color: AppTheme.successGreen,
+                  ),
               ],
             ),
             const SizedBox(height: 4),

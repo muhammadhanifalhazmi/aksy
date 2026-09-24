@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/summary_card.dart';
 import '../models/cash_entry.dart';
 
 class CashFlowScreen extends StatefulWidget {
@@ -18,7 +20,6 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final store = AppScope.of(context);
     final entries = store.cashEntries
         .where((e) => e.type == _selected)
@@ -63,45 +64,23 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(
-                      _selected == CashFlowType.cashIn
-                          ? Icons.trending_up
-                          : Icons.trending_down,
-                      color: _selected == CashFlowType.cashIn
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.error,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Total ${_selected.label}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
-                              )),
-                          Text(
-                            CurrencyFormatter.formatIDR(total),
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            child: SummaryCard(
+              icon: _selected == CashFlowType.cashIn
+                  ? Icons.trending_up
+                  : Icons.trending_down,
+              label: 'Total ${_selected.label}',
+              value: CurrencyFormatter.formatIDR(total),
+              color: _selected == CashFlowType.cashIn
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.error,
             ),
           ),
           Expanded(
             child: entries.isEmpty
-                ? const _EmptyCash()
+                ? const EmptyState(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Belum ada catatan',
+                  )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: entries.length,
@@ -123,34 +102,6 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => _CashFormSheet(store: store),
-    );
-  }
-}
-
-class _EmptyCash extends StatelessWidget {
-  const _EmptyCash();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.account_balance_wallet_outlined,
-            size: 48,
-            color: theme.colorScheme.outlineVariant,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Belum ada catatan',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -284,10 +235,12 @@ class _CashFormSheetState extends State<_CashFormSheet> {
                   ButtonSegment(
                     value: CashFlowType.cashIn,
                     label: Text('Masuk'),
+                    icon: Icon(Icons.south_west),
                   ),
                   ButtonSegment(
                     value: CashFlowType.cashOut,
                     label: Text('Keluar'),
+                    icon: Icon(Icons.north_east),
                   ),
                 ],
                 selected: {_type},

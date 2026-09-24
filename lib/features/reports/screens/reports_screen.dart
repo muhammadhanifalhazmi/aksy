@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/data/app_store.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/section_header.dart';
+import '../../../core/widgets/status_chip.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -63,7 +66,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   icon: Icons.trending_up,
                   title: 'Estimasi Laba',
                   value: CurrencyFormatter.formatIDR(profit),
-                  color: Colors.green.shade700,
+                  color: AppTheme.successGreen,
                 ),
               ),
             ],
@@ -91,20 +94,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Material(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
+          Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Arus Kas',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  const SectionHeader(title: 'Arus Kas'),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -155,20 +151,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          Material(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
+          Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Produk Terlaris',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  const SectionHeader(title: 'Produk Terlaris'),
                   const SizedBox(height: 12),
                   if (topProducts.isEmpty)
                     Text(
@@ -261,22 +250,9 @@ class _DateHeader extends StatelessWidget {
                 ),
               ),
               if (isToday)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'Hari ini',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                StatusChip(
+                  label: 'Hari ini',
+                  color: theme.colorScheme.primary,
                 ),
             ],
           ),
@@ -302,9 +278,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Material(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
+    return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

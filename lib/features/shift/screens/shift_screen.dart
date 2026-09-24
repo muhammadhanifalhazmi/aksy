@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/data/app_store.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/section_header.dart';
+import '../../../core/widgets/status_chip.dart';
 import '../models/shift_record.dart';
 
 class ShiftScreen extends StatelessWidget {
@@ -11,7 +15,6 @@ class ShiftScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final store = AppScope.of(context);
     final active = store.activeShift;
 
@@ -27,34 +30,13 @@ class ShiftScreen extends StatelessWidget {
           else
             _ActiveShiftCard(onClose: () => _closeShift(context, store)),
           const SizedBox(height: 20),
-          Text(
-            'Riwayat Shift',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          const SectionHeader(title: 'Riwayat Shift'),
           const SizedBox(height: 8),
           if (store.shifts.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 24),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.history,
-                      size: 44,
-                      color: theme.colorScheme.outlineVariant,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Belum ada shift ditutup',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.outline,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            const EmptyState(
+              icon: Icons.history,
+              title: 'Belum ada shift ditutup',
+              iconSize: 44,
             )
           else
             for (final shift in store.shifts.reversed)
@@ -182,8 +164,8 @@ class ShiftScreen extends StatelessWidget {
     final color = difference == 0
         ? theme.colorScheme.primary
         : difference > 0
-            ? Colors.green
-            : Colors.orange;
+            ? AppTheme.successGreen
+            : AppTheme.warningOrange;
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -399,23 +381,7 @@ class _ActiveShiftCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'Aktif',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+                StatusChip(label: 'Aktif', color: theme.colorScheme.primary),
               ],
             ),
             const SizedBox(height: 12),
@@ -499,8 +465,8 @@ class _ShiftHistoryCard extends StatelessWidget {
     final color = difference == 0
         ? theme.colorScheme.primary
         : difference > 0
-            ? Colors.green
-            : Colors.orange;
+            ? AppTheme.successGreen
+            : AppTheme.warningOrange;
 
     return Card(
       child: ListTile(

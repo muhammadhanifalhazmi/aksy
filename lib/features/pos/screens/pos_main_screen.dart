@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/data/app_store.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/barcode_scanner_screen.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../cash_flow/screens/cash_flow_screen.dart';
 import '../../debt/screens/debt_screen.dart';
 import '../../inventory/screens/inventory_screen.dart';
@@ -147,11 +149,20 @@ class _POSMainScreenState extends State<POSMainScreen> {
         ),
         Expanded(
           child: products.isEmpty
-              ? _EmptyProducts(
-                  onAddPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const InventoryScreen(),
+              ? EmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  iconSize: 64,
+                  title: 'Belum ada produk',
+                  subtitle: 'Tambahkan produk terlebih dahulu lewat menu '
+                      'Inventori agar bisa dijual atau dipindai.',
+                  action: FilledButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const InventoryScreen(),
+                      ),
                     ),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Tambah Produk'),
                   ),
                 )
               : GridView.builder(
@@ -365,54 +376,6 @@ class _CategoryFilter extends StatelessWidget {
   }
 }
 
-class _EmptyProducts extends StatelessWidget {
-  const _EmptyProducts({required this.onAddPressed});
-
-  final VoidCallback onAddPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: 64,
-              color: theme.colorScheme.primary.withValues(alpha: 0.4),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Belum ada produk',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tambahkan produk terlebih dahulu lewat menu Inventori '
-              'agar bisa dijual atau dipindai.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onAddPressed,
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah Produk'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ProductCard extends StatelessWidget {
   const _ProductCard({required this.product});
 
@@ -431,11 +394,9 @@ class _ProductCard extends StatelessWidget {
     final cart = CartScope.of(context);
     final qty = cart.quantityOf(product.id);
     final outOfStock = product.stock <= 0;
-    return Material(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
+    return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radius),
         onTap: outOfStock ? null : () => _registerTap(context, cart),
         child: Opacity(
           opacity: outOfStock ? 0.55 : 1,
