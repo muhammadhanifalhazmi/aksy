@@ -5,13 +5,21 @@ import '../../../core/data/app_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/app_navigation_drawer.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/status_chip.dart';
 import '../models/shift_record.dart';
 
 class ShiftScreen extends StatelessWidget {
-  const ShiftScreen({super.key});
+  const ShiftScreen({
+    super.key,
+    required this.selectedDestination,
+    required this.onDestinationSelected,
+  });
+
+  final AppDestination selectedDestination;
+  final ValueChanged<AppDestination> onDestinationSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -19,6 +27,10 @@ class ShiftScreen extends StatelessWidget {
     final active = store.activeShift;
 
     return Scaffold(
+      drawer: AppNavigationDrawer(
+        selectedDestination: selectedDestination,
+        onDestinationSelected: onDestinationSelected,
+      ),
       appBar: AppBar(
         title: const Text('Shift Kasir'),
       ),

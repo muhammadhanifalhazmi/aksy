@@ -5,13 +5,21 @@ import '../../../core/data/app_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/app_navigation_drawer.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/status_chip.dart';
 import '../../../core/widgets/summary_card.dart';
 import '../models/debt.dart';
 
 class DebtScreen extends StatefulWidget {
-  const DebtScreen({super.key});
+  const DebtScreen({
+    super.key,
+    required this.selectedDestination,
+    required this.onDestinationSelected,
+  });
+
+  final AppDestination selectedDestination;
+  final ValueChanged<AppDestination> onDestinationSelected;
 
   @override
   State<DebtScreen> createState() => _DebtScreenState();
@@ -32,6 +40,10 @@ class _DebtScreenState extends State<DebtScreen> {
     final outstanding = debts.fold(0, (sum, d) => sum + d.remaining);
 
     return Scaffold(
+      drawer: AppNavigationDrawer(
+        selectedDestination: widget.selectedDestination,
+        onDestinationSelected: widget.onDestinationSelected,
+      ),
       appBar: AppBar(
         title: const Text('Hutang & Piutang'),
         actions: [

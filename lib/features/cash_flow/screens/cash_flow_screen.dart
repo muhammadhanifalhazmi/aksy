@@ -4,12 +4,20 @@ import 'package:flutter/services.dart';
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/app_navigation_drawer.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/summary_card.dart';
 import '../models/cash_entry.dart';
 
 class CashFlowScreen extends StatefulWidget {
-  const CashFlowScreen({super.key});
+  const CashFlowScreen({
+    super.key,
+    required this.selectedDestination,
+    required this.onDestinationSelected,
+  });
+
+  final AppDestination selectedDestination;
+  final ValueChanged<AppDestination> onDestinationSelected;
 
   @override
   State<CashFlowScreen> createState() => _CashFlowScreenState();
@@ -28,6 +36,10 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
     final total = entries.fold(0, (sum, e) => sum + e.amount);
 
     return Scaffold(
+      drawer: AppNavigationDrawer(
+        selectedDestination: widget.selectedDestination,
+        onDestinationSelected: widget.onDestinationSelected,
+      ),
       appBar: AppBar(
         title: const Text('Kas Masuk / Keluar'),
         actions: [

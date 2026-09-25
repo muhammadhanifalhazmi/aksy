@@ -9,13 +9,21 @@ import '../../../core/data/app_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/app_navigation_drawer.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/status_chip.dart';
 import '../../pos/models/product.dart';
 import '../../pos/providers/cart_provider.dart';
 
 class InventoryScreen extends StatefulWidget {
-  const InventoryScreen({super.key});
+  const InventoryScreen({
+    super.key,
+    required this.selectedDestination,
+    required this.onDestinationSelected,
+  });
+
+  final AppDestination selectedDestination;
+  final ValueChanged<AppDestination> onDestinationSelected;
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
@@ -41,6 +49,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
           );
 
     return Scaffold(
+      drawer: AppNavigationDrawer(
+        selectedDestination: widget.selectedDestination,
+        onDestinationSelected: widget.onDestinationSelected,
+      ),
       appBar: AppBar(
         title: const Text('Inventori'),
         actions: [

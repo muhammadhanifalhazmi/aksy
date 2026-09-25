@@ -4,12 +4,20 @@ import '../../../core/data/app_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/app_navigation_drawer.dart';
 import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/status_chip.dart';
 import 'report_export_sheet.dart';
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
+  const ReportsScreen({
+    super.key,
+    required this.selectedDestination,
+    required this.onDestinationSelected,
+  });
+
+  final AppDestination selectedDestination;
+  final ValueChanged<AppDestination> onDestinationSelected;
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -36,6 +44,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final isToday = _isToday(day);
 
     return Scaffold(
+      drawer: AppNavigationDrawer(
+        selectedDestination: widget.selectedDestination,
+        onDestinationSelected: widget.onDestinationSelected,
+      ),
       appBar: AppBar(
         title: const Text('Laporan'),
         actions: [

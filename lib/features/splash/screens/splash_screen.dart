@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../app_shell_screen.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../pos/screens/pos_main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -53,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen>
     Future.delayed(const Duration(milliseconds: 2600), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const POSMainScreen()),
+        MaterialPageRoute(builder: (_) => const AppShellScreen()),
       );
     });
   }

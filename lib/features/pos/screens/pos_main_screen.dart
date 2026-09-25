@@ -6,20 +6,23 @@ import 'package:flutter/services.dart';
 import '../../../core/data/app_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/widgets/app_navigation_drawer.dart';
 import '../../../core/widgets/barcode_scanner_screen.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../../cash_flow/screens/cash_flow_screen.dart';
-import '../../debt/screens/debt_screen.dart';
-import '../../inventory/screens/inventory_screen.dart';
-import '../../reports/screens/reports_screen.dart';
-import '../../shift/screens/shift_screen.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import 'receipt_preview_dialog.dart';
 
 class POSMainScreen extends StatefulWidget {
-  const POSMainScreen({super.key});
+  const POSMainScreen({
+    super.key,
+    required this.selectedDestination,
+    required this.onDestinationSelected,
+  });
+
+  final AppDestination selectedDestination;
+  final ValueChanged<AppDestination> onDestinationSelected;
 
   @override
   State<POSMainScreen> createState() => _POSMainScreenState();
@@ -33,7 +36,10 @@ class _POSMainScreenState extends State<POSMainScreen> {
   Widget build(BuildContext context) {
     final cart = CartScope.of(context);
     return Scaffold(
-      drawer: _BuildDrawer(),
+      drawer: AppNavigationDrawer(
+        selectedDestination: widget.selectedDestination,
+        onDestinationSelected: widget.onDestinationSelected,
+      ),
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -67,9 +73,8 @@ class _POSMainScreenState extends State<POSMainScreen> {
             ),
           ),
           IconButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const InventoryScreen()),
-            ),
+            onPressed: () =>
+                widget.onDestinationSelected(AppDestination.inventory),
             tooltip: 'Inventori',
             icon: const Icon(Icons.inventory_2_outlined),
           ),
@@ -156,10 +161,8 @@ class _POSMainScreenState extends State<POSMainScreen> {
                   subtitle: 'Tambahkan produk terlebih dahulu lewat menu '
                       'Inventori agar bisa dijual atau dipindai.',
                   action: FilledButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const InventoryScreen(),
-                      ),
+                    onPressed: () => widget.onDestinationSelected(
+                      AppDestination.inventory,
                     ),
                     icon: const Icon(Icons.add),
                     label: const Text('Tambah Produk'),
@@ -228,110 +231,6 @@ class _POSMainScreenState extends State<POSMainScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => _CartSheet(cart: cart),
-    );
-  }
-}
-
-class _BuildDrawer extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final store = AppScope.of(context);
-    return NavigationDrawer(
-      onDestinationSelected: (index) {
-        final navigator = Navigator.of(context);
-        navigator.pop();
-        switch (index) {
-          case 0:
-            break;
-          case 1:
-            navigator.push(
-              MaterialPageRoute(builder: (_) => const InventoryScreen()),
-            );
-          case 2:
-            navigator.push(
-              MaterialPageRoute(builder: (_) => const CashFlowScreen()),
-            );
-          case 3:
-            navigator.push(
-              MaterialPageRoute(builder: (_) => const DebtScreen()),
-            );
-          case 4:
-            navigator.push(
-              MaterialPageRoute(builder: (_) => const ShiftScreen()),
-            );
-          case 5:
-            navigator.push(
-              MaterialPageRoute(builder: (_) => const ReportsScreen()),
-            );
-        }
-      },
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Image(
-                    image: AssetImage('assets/images/icon.png'),
-                    width: 40,
-                    height: 40,
-                  ),
-                  const SizedBox(width: 12),
-                    Flexible(
-                      child: Text(
-                        'Aplikasi Kasir Easy',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                store.activeShift == null
-                    ? 'Shift belum dibuka'
-                    : 'Shift ${store.activeShift!.id} aktif',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: store.activeShift == null
-                      ? theme.colorScheme.outline
-                      : theme.colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.point_of_sale),
-          label: Text('POS'),
-        ),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.inventory_2_outlined),
-          label: Text('Inventori'),
-        ),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.account_balance_wallet_outlined),
-          label: Text('Kas Masuk / Keluar'),
-        ),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.receipt_long_outlined),
-          label: Text('Hutang & Piutang'),
-        ),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.history),
-          label: Text('Shift Kasir'),
-        ),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.summarize_outlined),
-          label: Text('Laporan'),
-        ),
-      ],
     );
   }
 }

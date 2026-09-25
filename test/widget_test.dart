@@ -1,7 +1,8 @@
+import 'package:aksy/app_shell_screen.dart';
 import 'package:aksy/core/data/app_store.dart';
 import 'package:aksy/core/utils/currency_formatter.dart';
+import 'package:aksy/core/widgets/app_navigation_drawer.dart';
 import 'package:aksy/features/debt/models/debt.dart';
-import 'package:aksy/features/inventory/screens/inventory_screen.dart';
 import 'package:aksy/features/pos/models/product.dart';
 import 'package:aksy/features/pos/providers/cart_provider.dart';
 import 'package:flutter/material.dart';
@@ -78,6 +79,56 @@ void main() {
     });
   });
 
+  group('App navigation', () {
+    testWidgets('drawer is available on every primary page', (tester) async {
+      final store = AppStore();
+      final cart = CartProvider();
+      await tester.pumpWidget(
+        AppScope(
+          store: store,
+          child: CartScope(
+            notifier: cart,
+            child: const MaterialApp(home: AppShellScreen()),
+          ),
+        ),
+      );
+
+      Future<void> selectDestination(String label) async {
+        await tester.tap(find.byIcon(Icons.menu));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithText(NavigationDrawerDestination, label),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      expect(find.byTooltip('Inventori'), findsOneWidget);
+      await selectDestination('Inventori');
+      expect(find.text('Inventori'), findsOneWidget);
+      await selectDestination('Kas Masuk / Keluar');
+      expect(find.text('Kas Masuk / Keluar'), findsOneWidget);
+      await selectDestination('Hutang & Piutang');
+      expect(find.text('Hutang & Piutang'), findsOneWidget);
+      await selectDestination('Shift Kasir');
+      expect(find.text('Shift Kasir'), findsOneWidget);
+      await selectDestination('Laporan');
+      expect(find.text('Laporan'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      final drawers = tester.widgetList<NavigationDrawer>(
+        find.byType(NavigationDrawer, skipOffstage: false),
+      );
+      expect(drawers, isNotEmpty);
+      expect(
+        drawers.any(
+          (drawer) => drawer.selectedIndex == AppDestination.reports.index,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('InventoryScreen', () {
     testWidgets('deletes a product after confirmation', (tester) async {
       final product = _product(
@@ -94,11 +145,13 @@ void main() {
           store: store,
           child: CartScope(
             notifier: cart,
-            child: const MaterialApp(home: InventoryScreen()),
+            child: const MaterialApp(home: AppShellScreen()),
           ),
         ),
       );
 
+      await tester.tap(find.byTooltip('Inventori'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Hapus produk'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, 'Batal'));
