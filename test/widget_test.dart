@@ -169,6 +169,54 @@ void main() {
     });
   });
 
+  group('POS cart sheet', () {
+    testWidgets('quantity stepper updates the cart shown in the sheet', (
+      tester,
+    ) async {
+      final product = _product(
+        id: 'p1',
+        name: 'Kopi Susu',
+        price: 18000,
+        category: 'Minuman',
+      );
+      final store = AppStore(products: [product]);
+      final cart = CartProvider()..addItem(product);
+
+      await tester.pumpWidget(
+        AppScope(
+          store: store,
+          child: CartScope(
+            notifier: cart,
+            child: const MaterialApp(home: AppShellScreen()),
+          ),
+        ),
+      );
+
+      final sheet = find.byType(BottomSheet);
+      Finder inSheet(String text) =>
+          find.descendant(of: sheet, matching: find.text(text));
+
+      await tester.tap(find.byTooltip('Keranjang'));
+      await tester.pumpAndSettle();
+      expect(inSheet('1'), findsOneWidget);
+      expect(inSheet('1 item'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      expect(cart.quantityOf('p1'), 2);
+      expect(inSheet('2'), findsOneWidget);
+      expect(inSheet('2 item'), findsOneWidget);
+      expect(inSheet('Rp 36.000'), findsWidgets);
+
+      await tester.tap(find.byIcon(Icons.remove));
+      await tester.pumpAndSettle();
+      expect(cart.quantityOf('p1'), 1);
+      expect(inSheet('1'), findsOneWidget);
+      expect(inSheet('1 item'), findsOneWidget);
+      expect(inSheet('Rp 18.000'), findsWidgets);
+    });
+  });
+
   group('Tiered pricing', () {
     test('unitPriceFor falls back to retail without wholesale tier', () {
       final product = _product(

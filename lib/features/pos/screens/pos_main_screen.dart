@@ -64,7 +64,7 @@ class _POSMainScreenState extends State<POSMainScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () => _openCartDrawer(context, cart),
+            onPressed: () => _openCartDrawer(context),
             tooltip: 'Keranjang',
             icon: Badge(
               isLabelVisible: cart.itemCount > 0,
@@ -225,12 +225,12 @@ class _POSMainScreenState extends State<POSMainScreen> {
     }
   }
 
-  void _openCartDrawer(BuildContext context, CartProvider cart) {
+  void _openCartDrawer(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _CartSheet(cart: cart),
+      builder: (_) => const _CartSheet(),
     );
   }
 }
@@ -476,13 +476,12 @@ class _CartPanel extends StatelessWidget {
 }
 
 class _CartSheet extends StatelessWidget {
-  const _CartSheet({required this.cart});
-
-  final CartProvider cart;
+  const _CartSheet();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cart = CartScope.of(context);
     final store = AppScope.of(context);
     return SafeArea(
       child: SizedBox(
