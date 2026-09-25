@@ -11,8 +11,8 @@ import '../../features/shift/models/shift_record.dart';
 
 class AppStore extends ChangeNotifier {
   AppStore({List<Product>? products, SharedPreferences? prefs})
-      : _prefs = prefs,
-        _products = List.of(products ?? const <Product>[]);
+    : _prefs = prefs,
+      _products = List.of(products ?? const <Product>[]);
 
   static const _kProducts = 'store.products';
   static const _kOrders = 'store.orders';
@@ -63,34 +63,35 @@ class AppStore extends ChangeNotifier {
     }
 
     _products.addAll(
-      decode(_kProducts)
-          .map((e) => Product.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      decode(
+        _kProducts,
+      ).map((e) => Product.fromJson(e as Map<String, dynamic>)).toList(),
     );
     _orders.addAll(
-      decode(_kOrders)
-          .map((e) => Order.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      decode(
+        _kOrders,
+      ).map((e) => Order.fromJson(e as Map<String, dynamic>)).toList(),
     );
     _cashEntries.addAll(
-      decode(_kCashEntries)
-          .map((e) => CashEntry.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      decode(
+        _kCashEntries,
+      ).map((e) => CashEntry.fromJson(e as Map<String, dynamic>)).toList(),
     );
     _debts.addAll(
-      decode(_kDebts)
-          .map((e) => Debt.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      decode(
+        _kDebts,
+      ).map((e) => Debt.fromJson(e as Map<String, dynamic>)).toList(),
     );
     _shifts.addAll(
-      decode(_kShifts)
-          .map((e) => ShiftRecord.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      decode(
+        _kShifts,
+      ).map((e) => ShiftRecord.fromJson(e as Map<String, dynamic>)).toList(),
     );
     final activeRaw = prefs.getString(_kActiveShift);
     if (activeRaw != null && activeRaw.isNotEmpty) {
-      _activeShift =
-          ShiftRecord.fromJson(jsonDecode(activeRaw) as Map<String, dynamic>);
+      _activeShift = ShiftRecord.fromJson(
+        jsonDecode(activeRaw) as Map<String, dynamic>,
+      );
     }
   }
 
@@ -103,22 +104,13 @@ class AppStore extends ChangeNotifier {
       _kProducts,
       encode(_products.map((p) => p.toJson()).toList()),
     );
-    prefs.setString(
-      _kOrders,
-      encode(_orders.map((o) => o.toJson()).toList()),
-    );
+    prefs.setString(_kOrders, encode(_orders.map((o) => o.toJson()).toList()));
     prefs.setString(
       _kCashEntries,
       encode(_cashEntries.map((e) => e.toJson()).toList()),
     );
-    prefs.setString(
-      _kDebts,
-      encode(_debts.map((d) => d.toJson()).toList()),
-    );
-    prefs.setString(
-      _kShifts,
-      encode(_shifts.map((s) => s.toJson()).toList()),
-    );
+    prefs.setString(_kDebts, encode(_debts.map((d) => d.toJson()).toList()));
+    prefs.setString(_kShifts, encode(_shifts.map((s) => s.toJson()).toList()));
     prefs.setString(
       _kActiveShift,
       _activeShift == null ? '' : jsonEncode(_activeShift!.toJson()),
@@ -154,6 +146,14 @@ class AppStore extends ChangeNotifier {
     final index = _products.indexWhere((p) => p.id == product.id);
     if (index < 0) return;
     _products[index] = product;
+    _save();
+    notifyListeners();
+  }
+
+  void removeProduct(String productId) {
+    final index = _products.indexWhere((product) => product.id == productId);
+    if (index < 0) return;
+    _products.removeAt(index);
     _save();
     notifyListeners();
   }
@@ -208,10 +208,9 @@ class AppStore extends ChangeNotifier {
   int transactionCountOn(DateTime day) => ordersOn(day).length;
 
   int itemsSoldOn(DateTime day) {
-    return ordersOn(day).fold(
-      0,
-      (sum, o) => sum + o.items.fold(0, (s, i) => s + i.quantity),
-    );
+    return ordersOn(
+      day,
+    ).fold(0, (sum, o) => sum + o.items.fold(0, (s, i) => s + i.quantity));
   }
 
   int estimatedProfitOn(DateTime day) {
@@ -264,13 +263,18 @@ class AppStore extends ChangeNotifier {
   List<Order> ordersBetween(DateTime start, DateTime endExclusive) {
     return _orders
         .where(
-          (o) => !o.createdAt.isBefore(start) && o.createdAt.isBefore(endExclusive),
+          (o) =>
+              !o.createdAt.isBefore(start) &&
+              o.createdAt.isBefore(endExclusive),
         )
         .toList();
   }
 
   int omzetBetween(DateTime start, DateTime endExclusive) {
-    return ordersBetween(start, endExclusive).fold(0, (sum, o) => sum + o.total);
+    return ordersBetween(
+      start,
+      endExclusive,
+    ).fold(0, (sum, o) => sum + o.total);
   }
 
   int transactionCountBetween(DateTime start, DateTime endExclusive) {
@@ -278,10 +282,10 @@ class AppStore extends ChangeNotifier {
   }
 
   int itemsSoldBetween(DateTime start, DateTime endExclusive) {
-    return ordersBetween(start, endExclusive).fold(
-      0,
-      (sum, o) => sum + o.items.fold(0, (s, i) => s + i.quantity),
-    );
+    return ordersBetween(
+      start,
+      endExclusive,
+    ).fold(0, (sum, o) => sum + o.items.fold(0, (s, i) => s + i.quantity));
   }
 
   int estimatedProfitBetween(DateTime start, DateTime endExclusive) {
@@ -459,9 +463,7 @@ class AppStore extends ChangeNotifier {
   List<Order> currentShiftSales() {
     final shift = _activeShift;
     if (shift == null) return const [];
-    return _orders
-        .where((o) => !o.createdAt.isBefore(shift.openTime))
-        .toList();
+    return _orders.where((o) => !o.createdAt.isBefore(shift.openTime)).toList();
   }
 
   ShiftRecord? closeShift(int actualCash, {String? note}) {
@@ -519,11 +521,8 @@ class DailyAggregate {
 }
 
 class AppScope extends InheritedNotifier<AppStore> {
-  const AppScope({
-    super.key,
-    required AppStore store,
-    required super.child,
-  }) : super(notifier: store);
+  const AppScope({super.key, required AppStore store, required super.child})
+    : super(notifier: store);
 
   static AppStore of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<AppScope>();

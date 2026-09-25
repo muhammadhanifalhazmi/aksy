@@ -12,6 +12,7 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/status_chip.dart';
 import '../../pos/models/product.dart';
+import '../../pos/providers/cart_provider.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -26,15 +27,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
-    final products = store.products
-        .where(
-          (p) =>
-              _query.isEmpty ||
-              p.name.toLowerCase().contains(_query.toLowerCase()) ||
-              (p.barcode ?? '').contains(_query),
-        )
-        .toList()
-      ..sort((a, b) => (b.stock == 0 ? 1 : 0).compareTo(a.stock == 0 ? 1 : 0));
+    final products =
+        store.products
+            .where(
+              (p) =>
+                  _query.isEmpty ||
+                  p.name.toLowerCase().contains(_query.toLowerCase()) ||
+                  (p.barcode ?? '').contains(_query),
+            )
+            .toList()
+          ..sort(
+            (a, b) => (b.stock == 0 ? 1 : 0).compareTo(a.stock == 0 ? 1 : 0),
+          );
 
     return Scaffold(
       appBar: AppBar(
@@ -76,11 +80,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       final product = products[index];
                       return _InventoryCard(
                         product: product,
-                        onTap: () => _showProductForm(
-                          context,
-                          store,
-                          product: product,
-                        ),
+                        onTap: () =>
+                            _showProductForm(context, store, product: product),
+                        onDelete: () => _deleteProduct(context, store, product),
                       );
                     },
                   ),
@@ -99,11 +101,51 @@ class _InventoryScreenState extends State<InventoryScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ProductFormSheet(
-        store: store,
-        product: product,
-      ),
+      builder: (_) => _ProductFormSheet(store: store, product: product),
     );
+  }
+
+  Future<void> _deleteProduct(
+    BuildContext context,
+    AppStore store,
+    Product product,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return AlertDialog(
+          title: const Text('Hapus produk?'),
+          content: Text(
+            'Produk "${product.name}" akan dihapus permanen dari inventori.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.error,
+                foregroundColor: theme.colorScheme.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Hapus'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final cart = CartScope.of(context);
+    if (cart.quantityOf(product.id) > 0) {
+      cart.removeItem(product.id);
+    }
+    store.removeProduct(product.id);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Produk dihapus')));
   }
 }
 
@@ -181,10 +223,15 @@ class _ProductImagePicker extends StatelessWidget {
 }
 
 class _InventoryCard extends StatelessWidget {
-  const _InventoryCard({required this.product, required this.onTap});
+  const _InventoryCard({
+    required this.product,
+    required this.onTap,
+    required this.onDelete,
+  });
 
   final Product product;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   Widget _thumbPlaceholder(ThemeData theme) {
     return Container(
@@ -201,8 +248,8 @@ class _InventoryCard extends StatelessWidget {
     final stockColor = out
         ? theme.colorScheme.error
         : product.stock <= 5
-            ? AppTheme.warningOrange
-            : theme.colorScheme.primary;
+        ? AppTheme.warningOrange
+        : theme.colorScheme.primary;
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(AppTheme.radius),
@@ -290,6 +337,12 @@ class _InventoryCard extends StatelessWidget {
                     ],
                   ],
                 ),
+              ),
+              IconButton(
+                onPressed: onDelete,
+                tooltip: 'Hapus produk',
+                color: theme.colorScheme.error,
+                icon: const Icon(Icons.delete_outline),
               ),
             ],
           ),
@@ -415,7 +468,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
         ? null
         : int.tryParse(_minWholesaleQty.text.trim());
     final validWholesale =
-        (intended == null && minQty == null) || (intended != null && minQty != null);
+        (intended == null && minQty == null) ||
+        (intended != null && minQty != null);
     if (!validWholesale) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -449,7 +503,9 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     }
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(isNew ? 'Produk ditambahkan' : 'Produk diperbarui')),
+      SnackBar(
+        content: Text(isNew ? 'Produk ditambahkan' : 'Produk diperbarui'),
+      ),
     );
   }
 

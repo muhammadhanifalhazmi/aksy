@@ -1,6 +1,7 @@
 import 'package:aksy/core/data/app_store.dart';
 import 'package:aksy/core/utils/currency_formatter.dart';
 import 'package:aksy/features/debt/models/debt.dart';
+import 'package:aksy/features/inventory/screens/inventory_screen.dart';
 import 'package:aksy/features/pos/models/product.dart';
 import 'package:aksy/features/pos/providers/cart_provider.dart';
 import 'package:flutter/material.dart';
@@ -77,6 +78,44 @@ void main() {
     });
   });
 
+  group('InventoryScreen', () {
+    testWidgets('deletes a product after confirmation', (tester) async {
+      final product = _product(
+        id: 'p1',
+        name: 'Kopi Susu',
+        price: 18000,
+        category: 'Minuman',
+      );
+      final store = AppStore(products: [product]);
+      final cart = CartProvider()..addItem(product);
+
+      await tester.pumpWidget(
+        AppScope(
+          store: store,
+          child: CartScope(
+            notifier: cart,
+            child: const MaterialApp(home: InventoryScreen()),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byTooltip('Hapus produk'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Batal'));
+      await tester.pumpAndSettle();
+      expect(store.products, [product]);
+
+      await tester.tap(find.byTooltip('Hapus produk'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Hapus'));
+      await tester.pumpAndSettle();
+
+      expect(store.products, isEmpty);
+      expect(cart.isEmpty, isTrue);
+      expect(find.text(product.name), findsNothing);
+    });
+  });
+
   group('Tiered pricing', () {
     test('unitPriceFor falls back to retail without wholesale tier', () {
       final product = _product(
@@ -146,6 +185,27 @@ void main() {
       expect(store.cashInOn(DateTime.now()), 6000);
     });
 
+    test('removeProduct removes only the selected product', () {
+      final first = _product(
+        id: 'p1',
+        name: 'Air Mineral',
+        price: 3000,
+        category: 'Minuman',
+      );
+      final second = _product(
+        id: 'p2',
+        name: 'Es Teh',
+        price: 5000,
+        category: 'Minuman',
+      );
+      final store = AppStore(products: [first, second]);
+
+      store.removeProduct('p1');
+      store.removeProduct('missing');
+
+      expect(store.products, [second]);
+    });
+
     test('productByBarcode resolves matching barcode', () {
       final product = const Product(
         id: 'p1',
@@ -161,28 +221,30 @@ void main() {
       expect(store.productByBarcode('000'), isNull);
     });
 
-    test('recordDebtPayment supports partial payment and updates cash flow',
-        () {
-      final store = AppStore();
-      final debt = Debt(
-        id: 'd1',
-        type: DebtType.receivable,
-        partyName: 'Budi',
-        amount: 100000,
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      );
-      store.addDebt(debt);
-      expect(store.debts.single.remaining, 100000);
+    test(
+      'recordDebtPayment supports partial payment and updates cash flow',
+      () {
+        final store = AppStore();
+        final debt = Debt(
+          id: 'd1',
+          type: DebtType.receivable,
+          partyName: 'Budi',
+          amount: 100000,
+          createdAt: DateTime.now().subtract(const Duration(days: 1)),
+        );
+        store.addDebt(debt);
+        expect(store.debts.single.remaining, 100000);
 
-      store.recordDebtPayment('d1', 40000);
-      expect(store.debts.single.remaining, 60000);
-      expect(store.debts.single.isPaid, isFalse);
-      expect(store.cashInOn(DateTime.now()), 40000);
+        store.recordDebtPayment('d1', 40000);
+        expect(store.debts.single.remaining, 60000);
+        expect(store.debts.single.isPaid, isFalse);
+        expect(store.cashInOn(DateTime.now()), 40000);
 
-      store.recordDebtPayment('d1', 60000);
-      expect(store.debts.single.isPaid, isTrue);
-      expect(store.cashInOn(DateTime.now()), 100000);
-    });
+        store.recordDebtPayment('d1', 60000);
+        expect(store.debts.single.isPaid, isTrue);
+        expect(store.cashInOn(DateTime.now()), 100000);
+      },
+    );
 
     test('open/close shift computes expected cash and discrepancy', () {
       final product = _product(
@@ -243,6 +305,34 @@ void main() {
       expect(store.cashEntries, hasLength(1));
       expect(store.debts.single.partyName, 'Budi');
       expect(store.activeShift, isNotNull);
+    });
+
+    test('removeProduct persists the deletion', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final deleted = _product(
+        id: 'p1',
+        name: 'Kopi',
+        price: 15000,
+        category: 'Minuman',
+      );
+      final retained = _product(
+        id: 'p2',
+        name: 'Teh',
+        price: 5000,
+        category: 'Minuman',
+      );
+      final store = AppStore(prefs: prefs)
+        ..addProduct(deleted)
+        ..addProduct(retained);
+      await Future<void>.delayed(Duration.zero);
+
+      store.removeProduct(deleted.id);
+      await Future<void>.delayed(Duration.zero);
+
+      final restored = AppStore.fromPrefs(prefs);
+      expect(restored.products, hasLength(1));
+      expect(restored.products.single.id, retained.id);
     });
   });
 }
