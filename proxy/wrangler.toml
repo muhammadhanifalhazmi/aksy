@@ -1,8 +1,0 @@
-name = "aksy-assistant-proxy"
-main = "src/index.js"
-compatibility_date = "2026-09-26"
-
-# Free plan: 100k request/hari. Cukup untuk proxy chatbot.
-# Secrets (JANGAN commit nilai ini):
-#   npx wrangler secret put GEMINI_API_KEY
-#   npx wrangler secret put APP_TOKEN
