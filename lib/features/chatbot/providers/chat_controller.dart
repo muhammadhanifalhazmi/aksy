@@ -6,45 +6,52 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/data/app_store.dart';
 import '../models/chat_message.dart';
-import '../services/gemini_service.dart';
+import '../services/assistant_config.dart';
+import '../services/assistant_service.dart';
 import '../services/store_context.dart';
 
 class ChatController extends ChangeNotifier {
   ChatController({required AppStore store, SharedPreferences? prefs})
     : _store = store,
-      _prefs = prefs,
-      _apiKey = _resolveKey(prefs);
+      _prefs = prefs;
 
   final AppStore _store;
   SharedPreferences? _prefs;
   final List<ChatMessage> _messages = [];
 
   static const String _kMessages = 'chatbot.messages';
-  static const String _kApiKey = 'chatbot.api_key';
-
-  static String _resolveKey(SharedPreferences? prefs) {
-    final stored = prefs?.getString(_kApiKey)?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    return GeminiConfig.apiKey.trim();
-  }
-
-  String _apiKey;
-  bool _isBusy = false;
-  DateTime _lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   bool get isBusy => _isBusy;
   bool get isEmpty => _messages.isEmpty;
-  bool get hasApiKey => _apiKey.isNotEmpty;
-  String get model => GeminiConfig.model;
+
+  String get proxyUrl => _proxyUrl;
+  String get appToken => _appToken;
+  String get model => _model;
+  bool get isConfigured => _proxyUrl.trim().isNotEmpty;
+
+  String _proxyUrl = AssistantConfig.proxyUrl;
+  String _appToken = AssistantConfig.appToken;
+  String _model = AssistantConfig.model;
+  bool _isBusy = false;
+  DateTime _lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
-    _apiKey = _resolveKey(_prefs);
-    restore();
+    _readSettings();
+    _restore();
+    notifyListeners();
   }
 
-  void restore() {
+  void _readSettings() {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    _proxyUrl = AssistantConfig.proxyUrlOf(prefs);
+    _appToken = AssistantConfig.appTokenOf(prefs);
+    _model = AssistantConfig.modelOf(prefs);
+  }
+
+  void _restore() {
     final raw = _prefs?.getString(_kMessages);
     if (raw == null) return;
     try {
@@ -56,9 +63,8 @@ class ChatController extends ChangeNotifier {
           decoded
               .whereType<Map<String, dynamic>>()
               .map(ChatMessage.fromJson)
-              .where((m) => !m.isError),
+              .where((message) => !message.isError),
         );
-      notifyListeners();
     } on FormatException {
       return;
     }
@@ -71,13 +77,21 @@ class ChatController extends ChangeNotifier {
     );
   }
 
-  void setApiKey(String value) {
-    _apiKey = value.trim();
-    if (_apiKey.isEmpty) {
-      _prefs?.remove(_kApiKey);
-    } else {
-      _prefs?.setString(_kApiKey, _apiKey);
-    }
+  void saveSettings({
+    required String proxyUrl,
+    required String appToken,
+    required String model,
+  }) {
+    final prefs = _prefs;
+    if (prefs == null) return;
+
+    AssistantConfig.saveSettings(
+      prefs,
+      proxyUrl: proxyUrl,
+      appToken: appToken,
+      model: model,
+    );
+    _readSettings();
     notifyListeners();
   }
 
@@ -91,18 +105,11 @@ class ChatController extends ChangeNotifier {
     final text = prompt.trim();
     if (text.isEmpty || _isBusy) return;
 
-    if (!hasApiKey) {
-      _append(
-        ChatMessage(
-          role: ChatRole.assistant,
-          text:
-              'API key Gemini belum diatur. Tekan ikon kunci di pojok '
-              'kanan atas untuk mengaturnya.',
-          createdAt: DateTime.now(),
-          isError: true,
-        ),
+    if (!isConfigured) {
+      _appendError(
+        'URL proxy asisten belum diatur. Buka pengaturan asisten di pojok '
+        'kanan atas.',
       );
-      notifyListeners();
       return;
     }
 
@@ -120,12 +127,16 @@ class ChatController extends ChangeNotifier {
     _isBusy = true;
     notifyListeners();
 
-    final service = GeminiService(apiKey: _apiKey);
+    final service = AssistantService(
+      proxyUrl: _proxyUrl,
+      appToken: _appToken,
+      model: _model,
+    );
     final buffer = StringBuffer();
     try {
-      final context = StoreContext.build(_store);
-      final stream = service.sendReply(
-        systemInstruction: '${StoreContext.systemInstruction}\n\n$context',
+      final stream = service.sendMessage(
+        systemInstruction:
+            '${StoreContext.systemInstruction}\n\n${StoreContext.build(_store)}',
         history: _messages.sublist(0, replyIndex),
       );
       await for (final delta in stream) {
@@ -135,31 +146,12 @@ class ChatController extends ChangeNotifier {
         );
         _notifyThrottled();
       }
-      if (buffer.isEmpty) {
-        _messages[replyIndex] = _messages[replyIndex].copyWith(
-          text:
-              'Gemini tidak mengembalikan jawaban. Coba ulangi pertanyaannya.',
-        );
-      }
-    } on GeminiException catch (error) {
-      _messages.removeRange(replyIndex, _messages.length);
-      _append(
-        ChatMessage(
-          role: ChatRole.assistant,
-          text: error.message,
-          createdAt: DateTime.now(),
-          isError: true,
-        ),
-      );
+    } on AssistantException catch (error) {
+      _replaceWithError(replyIndex, error.message);
     } catch (_) {
-      _messages.removeRange(replyIndex, _messages.length);
-      _append(
-        ChatMessage(
-          role: ChatRole.assistant,
-          text: 'Terjadi kesalahan tak terduga saat menghubungi Gemini.',
-          createdAt: DateTime.now(),
-          isError: true,
-        ),
+      _replaceWithError(
+        replyIndex,
+        'Terjadi kesalahan tak terduga saat menghubungi asisten.',
       );
     } finally {
       service.dispose();
@@ -169,8 +161,21 @@ class ChatController extends ChangeNotifier {
     }
   }
 
-  void _append(ChatMessage message) {
-    _messages.add(message);
+  void _appendError(String text) {
+    _messages.add(
+      ChatMessage(
+        role: ChatRole.assistant,
+        text: text,
+        createdAt: DateTime.now(),
+        isError: true,
+      ),
+    );
+    notifyListeners();
+  }
+
+  void _replaceWithError(int index, String text) {
+    _messages.removeRange(index, _messages.length);
+    _appendError(text);
   }
 
   void _notifyThrottled() {

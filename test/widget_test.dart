@@ -2,6 +2,7 @@ import 'package:aksy/app_shell_screen.dart';
 import 'package:aksy/core/data/app_store.dart';
 import 'package:aksy/core/utils/currency_formatter.dart';
 import 'package:aksy/core/widgets/app_navigation_drawer.dart';
+import 'package:aksy/features/chatbot/services/assistant_config.dart';
 import 'package:aksy/features/chatbot/services/store_context.dart';
 import 'package:aksy/features/debt/models/debt.dart';
 import 'package:aksy/features/pos/models/cart_item.dart';
@@ -118,7 +119,7 @@ void main() {
       expect(find.text('Laporan'), findsOneWidget);
       await selectDestination('Asisten Kasir');
       expect(find.text('Asisten Kasir'), findsOneWidget);
-      expect(find.text('Atur API Key'), findsOneWidget);
+      expect(find.text('Tanya apa saja tentang tokomu'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.menu));
       await tester.pumpAndSettle();
@@ -509,6 +510,20 @@ void main() {
       expect(context, contains('Omzet: Rp 0'));
       expect(context, contains('Belum ada penjualan hari ini.'));
       expect(context, contains('Tidak ada shift yang sedang dibuka.'));
+    });
+  });
+
+  group('AssistantConfig', () {
+    test('normalizeBaseUrl adds a scheme and strips trailing slashes', () {
+      expect(
+        AssistantConfig.normalizeBaseUrl('  Example.workers.dev/  '),
+        'https://Example.workers.dev',
+      );
+      expect(
+        AssistantConfig.normalizeBaseUrl('http://10.0.2.2:8787//'),
+        'http://10.0.2.2:8787',
+      );
+      expect(AssistantConfig.normalizeBaseUrl('   '), '');
     });
   });
 }

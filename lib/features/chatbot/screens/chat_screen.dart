@@ -33,7 +33,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   ChatController? _controller;
-  bool _keyDialogOpen = false;
+  bool _settingsOpen = false;
 
   @override
   void didChangeDependencies() {
@@ -69,50 +69,64 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  Future<void> _openKeyDialog() async {
+  Future<void> _openSettings() async {
     final controller = _controller;
-    if (controller == null || _keyDialogOpen) return;
-    _keyDialogOpen = true;
+    if (controller == null || _settingsOpen) return;
+    _settingsOpen = true;
 
-    final field = TextEditingController();
-    final result = await showDialog<String>(
+    final proxyField = TextEditingController(text: controller.proxyUrl);
+    final tokenField = TextEditingController(text: controller.appToken);
+    final modelField = TextEditingController(text: controller.model);
+
+    final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('API Key Gemini'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Buat key di Google AI Studio, lalu tempel di sini. '
-                'Key tersimpan di perangkat ini saja.',
-                style: Theme.of(dialogContext).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: field,
-                autofocus: true,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'API key',
-                  hintText: 'AIza...',
+          title: const Text('Pengaturan Asisten'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Biasanya sudah terisi dari build dan tidak perlu diubah. '
+                  'Ubah hanya kalau kamu memakai proxy sendiri.',
+                  style: Theme.of(dialogContext).textTheme.bodySmall,
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: proxyField,
+                  keyboardType: TextInputType.url,
+                  decoration: const InputDecoration(
+                    labelText: 'URL proxy',
+                    hintText: 'https://namamu.workers.dev',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: tokenField,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Token aplikasi (opsional)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: modelField,
+                  decoration: const InputDecoration(
+                    labelText: 'Model',
+                    hintText: 'gemini-3.5-flash',
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
-            if (controller.hasApiKey)
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(''),
-                child: const Text('Hapus'),
-              ),
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Batal'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(field.text),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Simpan'),
             ),
           ],
@@ -120,21 +134,19 @@ class _ChatScreenState extends State<ChatScreen> {
       },
     );
 
-    _keyDialogOpen = false;
-    field.dispose();
+    _settingsOpen = false;
 
-    if (result == null) return;
-    controller.setApiKey(result);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.trim().isEmpty
-              ? 'API key dihapus.'
-              : 'API key tersimpan di perangkat ini.',
-        ),
-      ),
-    );
+    if (saved ?? false) {
+      controller.saveSettings(
+        proxyUrl: proxyField.text,
+        appToken: tokenField.text,
+        model: modelField.text,
+      );
+    }
+
+    proxyField.dispose();
+    tokenField.dispose();
+    modelField.dispose();
   }
 
   Future<void> _confirmClear() async {
@@ -176,15 +188,9 @@ class _ChatScreenState extends State<ChatScreen> {
         title: const Text('Asisten Kasir'),
         actions: [
           IconButton(
-            tooltip: controller?.hasApiKey ?? false
-                ? 'Ganti API key'
-                : 'Atur API key',
-            onPressed: controller == null ? null : _openKeyDialog,
-            icon: Icon(
-              (controller?.hasApiKey ?? false)
-                  ? Icons.key
-                  : Icons.key_off_outlined,
-            ),
+            tooltip: 'Pengaturan asisten',
+            onPressed: controller == null ? null : _openSettings,
+            icon: const Icon(Icons.tune),
           ),
           IconButton(
             tooltip: 'Hapus riwayat',
@@ -215,7 +221,9 @@ class _ChatScreenState extends State<ChatScreen> {
     ThemeData theme,
     ChatController controller,
   ) {
-    if (!controller.hasApiKey) return _buildKeySetup(context, theme);
+    if (!controller.isConfigured) {
+      return _buildNotConfigured(context, theme);
+    }
     if (controller.isEmpty) return _buildWelcome(context, theme, controller);
 
     final messages = controller.messages;
@@ -227,7 +235,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildKeySetup(BuildContext context, ThemeData theme) {
+  Widget _buildNotConfigured(BuildContext context, ThemeData theme) {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -235,21 +243,21 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.key_off_outlined,
+              Icons.cloud_off_outlined,
               size: 56,
               color: theme.colorScheme.outline,
             ),
             const SizedBox(height: 16),
             Text(
-              'API key belum diatur',
+              'Server asisten belum diatur',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Buat API key gratis di Google AI Studio, lalu tempel di sini '
-              'agar asisten bisa menganalisis data toko.',
+              'Isi URL proxy asisten agar fitur ini bisa dipakai. '
+              'Kalau kamu memakai build resmi, biasanya sudah terisi otomatis.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.outline,
@@ -257,9 +265,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
-              onPressed: _openKeyDialog,
-              icon: const Icon(Icons.vpn_key),
-              label: const Text('Atur API Key'),
+              onPressed: _openSettings,
+              icon: const Icon(Icons.tune),
+              label: const Text('Pengaturan'),
             ),
           ],
         ),
@@ -288,7 +296,7 @@ class _ChatScreenState extends State<ChatScreen> {
         const SizedBox(height: 8),
         Text(
           'Asisten sudah membawa data penjualan, stok, kas, dan hutang piutang '
-          'hari ini. Model: ${controller.model}',
+          'hari ini dari perangkat ini.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.outline,
