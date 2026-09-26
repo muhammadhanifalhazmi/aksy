@@ -2,7 +2,10 @@ import 'package:aksy/app_shell_screen.dart';
 import 'package:aksy/core/data/app_store.dart';
 import 'package:aksy/core/utils/currency_formatter.dart';
 import 'package:aksy/core/widgets/app_navigation_drawer.dart';
+import 'package:aksy/features/chatbot/services/store_context.dart';
 import 'package:aksy/features/debt/models/debt.dart';
+import 'package:aksy/features/pos/models/cart_item.dart';
+import 'package:aksy/features/pos/models/order.dart';
 import 'package:aksy/features/pos/models/product.dart';
 import 'package:aksy/features/pos/providers/cart_provider.dart';
 import 'package:flutter/material.dart';
@@ -113,6 +116,9 @@ void main() {
       expect(find.text('Shift Kasir'), findsOneWidget);
       await selectDestination('Laporan');
       expect(find.text('Laporan'), findsOneWidget);
+      await selectDestination('Asisten Kasir');
+      expect(find.text('Asisten Kasir'), findsOneWidget);
+      expect(find.text('Atur API Key'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.menu));
       await tester.pumpAndSettle();
@@ -122,7 +128,7 @@ void main() {
       expect(drawers, isNotEmpty);
       expect(
         drawers.any(
-          (drawer) => drawer.selectedIndex == AppDestination.reports.index,
+          (drawer) => drawer.selectedIndex == AppDestination.assistant.index,
         ),
         isTrue,
       );
@@ -434,6 +440,75 @@ void main() {
       final restored = AppStore.fromPrefs(prefs);
       expect(restored.products, hasLength(1));
       expect(restored.products.single.id, retained.id);
+    });
+  });
+
+  group('StoreContext', () {
+    test('summarises sales, shift, stock and debts for the assistant', () {
+      final kopi = _product(
+        id: 'p1',
+        name: 'Kopi Susu',
+        price: 18000,
+        category: 'Minuman',
+        stock: 5,
+      );
+      final teh = _product(
+        id: 'p2',
+        name: 'Es Teh',
+        price: 5000,
+        category: 'Minuman',
+      );
+      final roti = _product(
+        id: 'p3',
+        name: 'Roti Bakar',
+        price: 12000,
+        category: 'Snack',
+        stock: 3,
+      );
+
+      final store = AppStore(products: [kopi, teh, roti])..openShift(50000);
+      store.recordOrder(
+        Order(
+          id: 'o1',
+          createdAt: DateTime.now(),
+          items: [
+            CartItem(product: kopi, quantity: 2),
+            CartItem(product: teh, quantity: 1),
+          ],
+          paidAmount: 41000,
+        ),
+      );
+      store.addDebt(
+        Debt(
+          id: 'd1',
+          type: DebtType.receivable,
+          partyName: 'Bu Sari',
+          amount: 50000,
+          createdAt: DateTime.now(),
+          dueDate: DateTime.now().subtract(const Duration(days: 3)),
+        ),
+      );
+
+      final context = StoreContext.build(store);
+
+      expect(context, contains('Omzet: Rp 41.000'));
+      expect(context, contains('Transaksi: 1'));
+      expect(context, contains('Estimasi laba: Rp 20.500'));
+      expect(context, contains('Kas awal: Rp 50.000'));
+      expect(context, contains('Kopi Susu: 2 pcs'));
+      expect(context, contains('Roti Bakar (3)'));
+      expect(context, contains('Stok habis: 0'));
+      expect(context, contains('Total piutang: Rp 50.000'));
+      expect(context, contains('Piutang lewat jatuh tempo: 1'));
+      expect(context, contains('Terlambat: Bu Sari'));
+    });
+
+    test('reports no sales and closed shift on an empty store', () {
+      final context = StoreContext.build(AppStore());
+
+      expect(context, contains('Omzet: Rp 0'));
+      expect(context, contains('Belum ada penjualan hari ini.'));
+      expect(context, contains('Tidak ada shift yang sedang dibuka.'));
     });
   });
 }
