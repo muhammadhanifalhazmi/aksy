@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/widgets/app_navigation_drawer.dart';
 import 'features/cash_flow/screens/cash_flow_screen.dart';
 import 'features/debt/screens/debt_screen.dart';
+import 'features/guide/screens/guide_screen.dart';
 import 'features/inventory/screens/inventory_screen.dart';
 import 'features/pos/screens/pos_main_screen.dart';
 import 'features/reports/screens/reports_screen.dart';
@@ -56,6 +57,10 @@ class _AppShellScreenState extends State<AppShellScreen> {
             onDestinationSelected: _selectDestination,
           ),
           ReportsScreen(
+            selectedDestination: _selectedDestination,
+            onDestinationSelected: _selectDestination,
+          ),
+          GuideScreen(
             selectedDestination: _selectedDestination,
             onDestinationSelected: _selectDestination,
           ),

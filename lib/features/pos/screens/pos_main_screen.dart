@@ -78,6 +78,11 @@ class _POSMainScreenState extends State<POSMainScreen> {
             tooltip: 'Inventori',
             icon: const Icon(Icons.inventory_2_outlined),
           ),
+          IconButton(
+            onPressed: () => widget.onDestinationSelected(AppDestination.guide),
+            tooltip: 'Panduan',
+            icon: const Icon(Icons.help_outline),
+          ),
         ],
       ),
       body: LayoutBuilder(

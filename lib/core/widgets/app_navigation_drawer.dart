@@ -2,7 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../data/app_store.dart';
 
-enum AppDestination { pos, inventory, cashFlow, debt, shift, reports }
+enum AppDestination {
+  pos,
+  inventory,
+  cashFlow,
+  debt,
+  shift,
+  reports,
+  guide,
+}
 
 class AppNavigationDrawer extends StatelessWidget {
   const AppNavigationDrawer({
@@ -91,6 +99,10 @@ class AppNavigationDrawer extends StatelessWidget {
         const NavigationDrawerDestination(
           icon: Icon(Icons.summarize_outlined),
           label: Expanded(child: Text('Laporan')),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.menu_book_outlined),
+          label: Expanded(child: Text('Panduan')),
         ),
       ],
     );
