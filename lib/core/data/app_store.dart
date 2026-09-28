@@ -8,6 +8,7 @@ import '../../features/debt/models/debt.dart';
 import '../../features/pos/models/order.dart';
 import '../../features/pos/models/product.dart';
 import '../../features/shift/models/shift_record.dart';
+import 'store_settings.dart';
 
 class AppStore extends ChangeNotifier {
   AppStore({List<Product>? products, SharedPreferences? prefs})
@@ -20,6 +21,8 @@ class AppStore extends ChangeNotifier {
   static const _kDebts = 'store.debts';
   static const _kShifts = 'store.shifts';
   static const _kActiveShift = 'store.active_shift';
+  static const _kSettings = 'store.settings';
+  static const _backupVersion = 1;
 
   static Future<AppStore> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -39,6 +42,7 @@ class AppStore extends ChangeNotifier {
   final List<Debt> _debts = [];
   final List<ShiftRecord> _shifts = [];
   ShiftRecord? _activeShift;
+  StoreSettings _settings = const StoreSettings();
 
   List<Product> get products => List.unmodifiable(_products);
   List<Order> get orders => List.unmodifiable(_orders);
@@ -46,6 +50,7 @@ class AppStore extends ChangeNotifier {
   List<Debt> get debts => List.unmodifiable(_debts);
   List<ShiftRecord> get shifts => List.unmodifiable(_shifts);
   ShiftRecord? get activeShift => _activeShift;
+  StoreSettings get settings => _settings;
 
   List<String> get categories {
     final seen = <String>{};
@@ -93,6 +98,16 @@ class AppStore extends ChangeNotifier {
         jsonDecode(activeRaw) as Map<String, dynamic>,
       );
     }
+    final settingsRaw = prefs.getString(_kSettings);
+    if (settingsRaw != null && settingsRaw.isNotEmpty) {
+      try {
+        _settings = StoreSettings.fromJson(
+          jsonDecode(settingsRaw) as Map<String, dynamic>,
+        );
+      } catch (_) {
+        _settings = const StoreSettings();
+      }
+    }
   }
 
   void _save() {
@@ -115,6 +130,13 @@ class AppStore extends ChangeNotifier {
       _kActiveShift,
       _activeShift == null ? '' : jsonEncode(_activeShift!.toJson()),
     );
+    prefs.setString(_kSettings, jsonEncode(_settings.toJson()));
+  }
+
+  void updateStoreSettings(StoreSettings settings) {
+    _settings = settings;
+    _save();
+    notifyListeners();
   }
 
   Product? productById(String id) {
@@ -485,6 +507,75 @@ class AppStore extends ChangeNotifier {
     _save();
     notifyListeners();
     return closed;
+  }
+
+  String exportBackupJson() {
+    final data = <String, dynamic>{
+      'version': _backupVersion,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'settings': _settings.toJson(),
+      'products': _products.map((p) => p.toJson()).toList(),
+      'orders': _orders.map((o) => o.toJson()).toList(),
+      'cashEntries': _cashEntries.map((e) => e.toJson()).toList(),
+      'debts': _debts.map((d) => d.toJson()).toList(),
+      'shifts': _shifts.map((s) => s.toJson()).toList(),
+      'activeShift': _activeShift?.toJson(),
+    };
+    return const JsonEncoder.withIndent('  ').convert(data);
+  }
+
+  bool importBackup(String raw) {
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return false;
+    }
+    try {
+      final products = _decodeList(data['products'], Product.fromJson);
+      final orders = _decodeList(data['orders'], Order.fromJson);
+      final cashEntries = _decodeList(data['cashEntries'], CashEntry.fromJson);
+      final debts = _decodeList(data['debts'], Debt.fromJson);
+      final shifts = _decodeList(data['shifts'], ShiftRecord.fromJson);
+      final settings = StoreSettings.fromJson(
+        (data['settings'] as Map?)?.cast<String, dynamic>() ?? const {},
+      );
+      final activeShift = data['activeShift'] == null
+          ? null
+          : ShiftRecord.fromJson(
+              (data['activeShift'] as Map).cast<String, dynamic>(),
+            );
+
+      _products
+        ..clear()
+        ..addAll(products);
+      _orders
+        ..clear()
+        ..addAll(orders);
+      _cashEntries
+        ..clear()
+        ..addAll(cashEntries);
+      _debts
+        ..clear()
+        ..addAll(debts);
+      _shifts
+        ..clear()
+        ..addAll(shifts);
+      _settings = settings;
+      _activeShift = activeShift;
+      _save();
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  List<T> _decodeList<T>(dynamic raw, T Function(Map<String, dynamic>) fromJson) {
+    final list = (raw as List?) ?? const [];
+    return list
+        .map((e) => fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
   }
 }
 

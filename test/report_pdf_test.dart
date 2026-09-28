@@ -7,6 +7,7 @@ import 'package:aksy/core/data/app_store.dart';
 import 'package:aksy/features/pos/models/cart_item.dart';
 import 'package:aksy/features/pos/models/order.dart';
 import 'package:aksy/features/pos/models/product.dart';
+import 'package:aksy/features/pos/services/receipt_pdf_generator.dart';
 import 'package:aksy/features/reports/models/report_period.dart';
 import 'package:aksy/features/reports/services/report_pdf_generator.dart';
 
@@ -74,6 +75,54 @@ void main() {
         anchor: DateTime.now(),
       );
       final bytes = await generateReportPdf(store: store, period: period);
+      expect(bytes, isNotEmpty);
+    });
+  });
+
+  group('generateReceiptPdf', () {
+    final drink = Product(
+      id: 'p1',
+      name: 'Es Teh',
+      price: 5000,
+      category: 'Minuman',
+      icon: Icons.local_drink,
+      stock: 1000,
+      costPrice: 2000,
+    );
+
+    test('produces a non-empty PDF for wide and narrow formats', () async {
+      final store = AppStore(products: [drink]);
+      final order = Order(
+        id: 'o1',
+        createdAt: DateTime.now(),
+        items: [CartItem(product: drink, quantity: 2)],
+        paidAmount: 10000,
+      );
+
+      for (final wide in [true, false]) {
+        final bytes = await generateReceiptPdf(
+          order: order,
+          store: store,
+          wide: wide,
+        );
+        expect(bytes, isA<Uint8List>());
+        expect(bytes, isNotEmpty);
+      }
+    });
+
+    test('works without a paid amount or change', () async {
+      final store = AppStore(products: [drink]);
+      final order = Order(
+        id: 'o2',
+        createdAt: DateTime.now(),
+        items: [CartItem(product: drink, quantity: 1)],
+        paidAmount: 0,
+      );
+      final bytes = await generateReceiptPdf(
+        order: order,
+        store: store,
+        wide: true,
+      );
       expect(bytes, isNotEmpty);
     });
   });

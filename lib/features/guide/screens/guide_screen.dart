@@ -272,6 +272,27 @@ class _GuideSection {
             'periode.',
       ],
     ),
+    _GuideSection(
+      icon: Icons.settings_outlined,
+      title: 'Pengaturan & Cadangan Data',
+      description:
+          'Atur identitas toko untuk struk dan laporan, serta amankan data '
+          'dengan cadangan.',
+      steps: [
+        'Buka menu Pengaturan untuk mengisi nama toko, alamat, dan telepon. '
+            'Identitas ini dipakai di kepala struk dan laporan PDF.',
+        'Isi pesan bawah struk (opsional), misalnya syarat dan ketentuan toko.',
+        'Gunakan "Cadangkan Data" untuk menyimpan seluruh data ke file .json, '
+            'lalu simpan/bagikan ke tempat aman.',
+        'Gunakan "Pulihkan dari File" untuk memuat data dari file cadangan. '
+            'Seluruh data saat ini akan digantikan isi file tersebut.',
+      ],
+      tips: [
+        'Lakukan cadangan berkala, misalnya setiap akhir minggu.',
+        'Perubahan identitas toko langsung berlaku pada struk dan laporan '
+            'berikutnya.',
+      ],
+    ),
   ];
 }
 

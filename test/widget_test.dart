@@ -1,5 +1,6 @@
 import 'package:aksy/app_shell_screen.dart';
 import 'package:aksy/core/data/app_store.dart';
+import 'package:aksy/core/data/store_settings.dart';
 import 'package:aksy/core/utils/currency_formatter.dart';
 import 'package:aksy/core/widgets/app_navigation_drawer.dart';
 import 'package:aksy/features/debt/models/debt.dart';
@@ -434,6 +435,109 @@ void main() {
       final restored = AppStore.fromPrefs(prefs);
       expect(restored.products, hasLength(1));
       expect(restored.products.single.id, retained.id);
+    });
+
+    test('store settings persist through SharedPreferences', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      AppStore.fromPrefs(prefs).updateStoreSettings(
+        const StoreSettings(
+          name: 'Toko Bahagia',
+          address: 'Jl. Sudirman No. 1',
+          phone: '08123456789',
+          footer: 'Terima kasih sudah belanja',
+        ),
+      );
+
+      final restored = AppStore.fromPrefs(prefs);
+      expect(restored.settings.name, 'Toko Bahagia');
+      expect(restored.settings.address, 'Jl. Sudirman No. 1');
+      expect(restored.settings.phone, '08123456789');
+      expect(restored.settings.footer, 'Terima kasih sudah belanja');
+    });
+
+    test('store settings default to Aplikasi Kasir Easy', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = AppStore.fromPrefs(prefs);
+      expect(store.settings.name, 'Aplikasi Kasir Easy');
+      expect(store.settings.address, '');
+      expect(store.settings.phone, '');
+    });
+  });
+
+  group('AppStore backup', () {
+    test('exportBackupJson/importBackup round-trips all data', () {
+      final store = AppStore()
+        ..updateStoreSettings(
+          const StoreSettings(name: 'Toko Bahagia', phone: '08123'),
+        );
+      final product = _product(
+        id: 'p1',
+        name: 'Air Mineral',
+        price: 3000,
+        category: 'Minuman',
+        stock: 10,
+      );
+      store.addProduct(product);
+      store.openShift(50000);
+      final cart = CartProvider();
+      cart.addItem(product);
+      cart.submitOrder(10000, store);
+      store.addDebt(
+        Debt(
+          id: 'd1',
+          type: DebtType.receivable,
+          partyName: 'Budi',
+          amount: 50000,
+          createdAt: DateTime.now(),
+        ),
+      );
+
+      final backup = store.exportBackupJson();
+      expect(backup, contains('"version": 1'));
+
+      final restored = AppStore();
+      expect(restored.importBackup(backup), isTrue);
+      expect(restored.settings.name, 'Toko Bahagia');
+      expect(restored.products.single.id, 'p1');
+      expect(restored.stockOf('p1'), 9);
+      expect(restored.orders.single.items.single.quantity, 1);
+      expect(restored.cashEntries, hasLength(1));
+      expect(restored.debts.single.partyName, 'Budi');
+      expect(restored.activeShift, isNotNull);
+    });
+
+    test('importBackup rejects invalid JSON without corrupting state', () {
+      final store = AppStore();
+      final product = _product(
+        id: 'p1',
+        name: 'Es Teh',
+        price: 5000,
+        category: 'Minuman',
+      );
+      store.addProduct(product);
+
+      expect(store.importBackup('bukan json'), isFalse);
+      expect(store.importBackup('{"products": "bukan-list"}'), isFalse);
+      expect(store.products, [product]);
+    });
+
+    test('importBackup overrides existing data atomically', () {
+      final store = AppStore();
+      store.addProduct(
+        _product(id: 'p1', name: 'Lama', price: 1000, category: 'Minuman'),
+      );
+
+      final source = AppStore()
+        ..addProduct(
+          _product(id: 'p2', name: 'Baru', price: 2000, category: 'Snack'),
+        );
+      final backup = source.exportBackupJson();
+
+      expect(store.importBackup(backup), isTrue);
+      expect(store.products.single.name, 'Baru');
+      expect(store.products, hasLength(1));
     });
   });
 }

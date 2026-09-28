@@ -10,6 +10,7 @@ enum AppDestination {
   shift,
   reports,
   guide,
+  settings,
 }
 
 class AppNavigationDrawer extends StatelessWidget {
@@ -103,6 +104,10 @@ class AppNavigationDrawer extends StatelessWidget {
         const NavigationDrawerDestination(
           icon: Icon(Icons.menu_book_outlined),
           label: Expanded(child: Text('Panduan')),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.settings_outlined),
+          label: Expanded(child: Text('Pengaturan')),
         ),
       ],
     );

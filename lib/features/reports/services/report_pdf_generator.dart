@@ -56,7 +56,7 @@ Future<Uint8List> generateReportPdf({
       ),
       build: (ctx) {
         final sections = <pw.Widget>[
-          _buildHeader(period),
+          _buildHeader(period, store),
           _buildSummary(store, period),
           pw.SizedBox(height: 22),
           _buildSectionTitle('Penjualan per $weekLabel'),
@@ -119,7 +119,8 @@ String _periodBucketType(ReportPeriod period) {
   }
 }
 
-pw.Widget _buildHeader(ReportPeriod period) {
+pw.Widget _buildHeader(ReportPeriod period, AppStore store) {
+  final settings = store.settings;
   return pw.Row(
     crossAxisAlignment: pw.CrossAxisAlignment.center,
     children: [
@@ -146,17 +147,23 @@ pw.Widget _buildHeader(ReportPeriod period) {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              'Aplikasi Kasir Easy',
+              settings.name,
               style: pw.TextStyle(
                 color: _ink,
                 fontSize: 14,
                 fontWeight: pw.FontWeight.bold,
               ),
             ),
-            pw.Text(
-              'Jl. Merdeka No. 45, Jakarta',
-              style: pw.TextStyle(color: _muted, fontSize: 9),
-            ),
+            if (settings.address.isNotEmpty)
+              pw.Text(
+                settings.address,
+                style: pw.TextStyle(color: _muted, fontSize: 9),
+              ),
+            if (settings.phone.isNotEmpty)
+              pw.Text(
+                settings.phone,
+                style: pw.TextStyle(color: _muted, fontSize: 9),
+              ),
           ],
         ),
       ),

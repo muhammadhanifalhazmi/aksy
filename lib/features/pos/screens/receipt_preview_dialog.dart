@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../models/cart_item.dart';
 import '../models/order.dart';
+import '../services/receipt_pdf_generator.dart';
 
 Future<void> showReceiptPreview(
   BuildContext context, {
@@ -33,6 +35,7 @@ class ReceiptPreviewDialog extends StatefulWidget {
 
 class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
   bool _wide = false;
+  bool _busy = false;
 
   @override
   Widget build(BuildContext context) {
@@ -112,16 +115,28 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _mockAction('Struk dibagikan (mock)'),
-                      icon: const Icon(Icons.share),
+                      onPressed: _busy ? null : _share,
+                      icon: _busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.share),
                       label: const Text('Bagikan'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => _mockAction('Struk dicetak (mock)'),
-                      icon: const Icon(Icons.print),
+                      onPressed: _busy ? null : _print,
+                      icon: _busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.print),
                       label: const Text('Cetak'),
                     ),
                   ),
@@ -136,10 +151,12 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
 
   List<Widget> _header() {
     final shift = widget.store.activeShift;
+    final settings = widget.store.settings;
     return [
-      const _CenterLine('AKWARIAH'),
-      const _CenterLine('Jl. Merdeka No. 45, Jakarta'),
-      const _CenterLine('Telp: 021-555-0123'),
+      _CenterLine(settings.name),
+      if (settings.address.isNotEmpty) _CenterLine(settings.address),
+      if (settings.phone.isNotEmpty) _CenterLine(settings.phone),
+      if (settings.footer.isNotEmpty) _CenterLine(settings.footer),
       const SizedBox(height: 6),
       _Row(
         left: 'No. ${widget.order.id}',
@@ -195,8 +212,48 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
     ];
   }
 
-  void _mockAction(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  Future<void> _share() => _exportReceipt(isPrint: false);
+
+  Future<void> _print() => _exportReceipt(isPrint: true);
+
+  Future<void> _exportReceipt({required bool isPrint}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final bytes = await generateReceiptPdf(
+        order: widget.order,
+        store: widget.store,
+        wide: _wide,
+      );
+      if (!mounted) return;
+      final name = 'struk-${widget.order.id}.pdf';
+      if (isPrint) {
+        await Printing.layoutPdf(name: name, onLayout: (_) async => bytes);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Struk dikirim ke dialog cetak')),
+        );
+      } else {
+        await Printing.sharePdf(bytes: bytes, filename: name);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Struk PDF dibagikan')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isPrint
+                ? 'Gagal mencetak struk'
+                : 'Tidak ada aplikasi untuk membagikan struk',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }
 
