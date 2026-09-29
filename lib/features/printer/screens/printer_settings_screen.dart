@@ -88,7 +88,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
 
   Future<void> _select(BluetoothPrinterDevice device) async {
     final store = AppScope.of(context);
-    await _run(
+    final connected = await _run(
       () => _service.connect(
         store.printer.copyWith(
           deviceAddress: device.address,
@@ -96,6 +96,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         ),
       ),
       successMessage: 'Printer ${device.name} dipilih',
+    );
+    if (!connected || !mounted) return;
+    store.updatePrinterSettings(
+      store.printer.copyWith(
+        deviceAddress: device.address,
+        deviceName: device.name,
+      ),
     );
   }
 
@@ -112,11 +119,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     );
   }
 
-  Future<void> _run(
+  Future<bool> _run(
     Future<void> Function() action, {
     required String successMessage,
   }) async {
-    if (_busy) return;
+    if (_busy) return false;
     setState(() {
       _busy = true;
       _statusMessage = null;
@@ -124,8 +131,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     try {
       await action();
       _setStatus(successMessage, isError: false);
+      return true;
     } on PrinterException catch (error) {
       _setStatus(error.message, isError: true);
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }

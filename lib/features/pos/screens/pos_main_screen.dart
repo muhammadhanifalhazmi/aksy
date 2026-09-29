@@ -1014,36 +1014,49 @@ Future<void> _showPaymentDialog(
                                       );
                                     }
                                     if (!screenContext.mounted) return;
-                                    if (store.printer.autoPrint &&
-                                        store.printer.isConfigured) {
-                                      Future<void> retry() =>
-                                          printReceiptManually(
-                                            context: screenContext,
-                                            store: store,
-                                            order: order,
-                                          );
-                                      final printed = await printReceiptSilently(
-                                        context: screenContext,
-                                        store: store,
-                                        order: order,
-                                      );
-                                      if (!screenContext.mounted) return;
-                                      if (printed) {
+                                    if (store.printer.autoPrint) {
+                                      if (!store.printer.isConfigured) {
                                         ScaffoldMessenger.of(screenContext)
                                             .showSnackBar(
-                                              SnackBar(
+                                              const SnackBar(
                                                 content: Text(
-                                                  'Struk dicetak ke '
-                                                  '${store.printer.deviceName}',
+                                                  'Cetak otomatis aktif tapi '
+                                                  'printer belum dipilih. Buka '
+                                                  'menu Printer Termal.',
                                                 ),
                                               ),
                                             );
                                       } else {
-                                        await showPrintFailureDialog(
-                                          screenContext,
-                                          message: 'Printer tidak merespons',
-                                          onRetry: retry,
-                                        );
+                                        final printed =
+                                            await printReceiptSilently(
+                                              context: screenContext,
+                                              store: store,
+                                              order: order,
+                                            );
+                                        if (!screenContext.mounted) return;
+                                        if (printed) {
+                                          ScaffoldMessenger.of(screenContext)
+                                              .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Struk dicetak ke '
+                                                    '${store.printer.deviceName}',
+                                                  ),
+                                                ),
+                                              );
+                                        } else {
+                                          await showPrintFailureDialog(
+                                            screenContext,
+                                            message:
+                                                'Printer tidak merespons saat '
+                                                'mencetak.',
+                                            onRetry: () => printReceiptManually(
+                                              context: screenContext,
+                                              store: store,
+                                              order: order,
+                                            ),
+                                          );
+                                        }
                                       }
                                     }
                                     if (screenContext.mounted) {

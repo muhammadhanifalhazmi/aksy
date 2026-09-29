@@ -12,13 +12,24 @@ Future<bool> printReceiptSilently({
   ThermalPrinterService? service,
 }) async {
   final printer = service ?? ThermalPrinterService();
-  if (!printer.isSupported) return false;
+  if (!printer.isSupported) {
+    debugPrint('print: platform tidak mendukung printer');
+    return false;
+  }
   final settings = store.printer;
-  if (!settings.isConfigured) return false;
+  if (!settings.isConfigured) {
+    debugPrint('print: dilewati, printer belum dipilih');
+    return false;
+  }
+  debugPrint(
+    'print: kirim struk ${order.id} ke ${settings.deviceName} (${settings.deviceAddress})',
+  );
   try {
     await printer.printReceipt(settings: settings, store: store, order: order);
+    debugPrint('print: struk ${order.id} terkirim');
     return true;
-  } on PrinterException {
+  } on PrinterException catch (error) {
+    debugPrint('print: struk ${order.id} gagal -> ${error.message}');
     return false;
   }
 }

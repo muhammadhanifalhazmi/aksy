@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.BinaryMessenger
@@ -28,6 +29,7 @@ class BluetoothPrinterPlugin(
 
     companion object {
         const val CHANNEL = "com.example.aksy/printer"
+        private const val TAG = "AksyPrinter"
         private const val PERMISSION_REQUEST_CODE = 0xB7
         private const val CHUNK_SIZE = 256
         private const val CHUNK_DELAY_MS = 20L
@@ -63,6 +65,7 @@ class BluetoothPrinterPlugin(
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        Log.d(TAG, "call: ${call.method}")
         when (call.method) {
             "hasPermissions" -> result.success(hasPermissions())
             "requestPermissions" -> requestPermissions(result)
@@ -170,11 +173,14 @@ class BluetoothPrinterPlugin(
             for (uuid in SPP_UUIDS) {
                 var candidate: BluetoothSocket? = null
                 try {
+                    Log.d(TAG, "connect: mencoba ${shortUuid(uuid)} ke $address")
                     candidate = device.createRfcommSocketToServiceRecord(UUID.fromString(uuid))
                     candidate.connect()
                     Thread.sleep(SETTLE_AFTER_CONNECT_MS)
 
-                    if (queryStatus(candidate) == null) {
+                    val status = queryStatus(candidate)
+                    Log.d(TAG, "connect: ${shortUuid(uuid)} status=0x${hex(status)}")
+                    if (status == null) {
                         closeQuietly(candidate)
                         failures += "${shortUuid(uuid)} tidak merespons"
                         continue
@@ -182,14 +188,17 @@ class BluetoothPrinterPlugin(
 
                     socket = candidate
                     activeUuid = uuid
+                    Log.d(TAG, "connect: BERHASIL di ${shortUuid(uuid)}")
                     postSuccess(result, mapOf("uuid" to uuid))
                     return@execute
                 } catch (error: Exception) {
+                    Log.w(TAG, "connect: ${shortUuid(uuid)} gagal -> ${error.javaClass.simpleName}: ${error.message}")
                     closeQuietly(candidate)
                     failures += "${shortUuid(uuid)}: ${error.message ?: "gagal"}"
                 }
             }
 
+            Log.e(TAG, "connect: seluruh channel gagal. $failures")
             postError(
                 result,
                 "connect_failed",
@@ -208,29 +217,36 @@ class BluetoothPrinterPlugin(
         }
         val active = socket
         if (active == null || !active.isConnected) {
+            Log.e(TAG, "print: gagal, socket tidak hidup")
             result.error("not_connected", "Printer belum terhubung", null)
             return
         }
         worker.execute {
             try {
+                Log.d(TAG, "print: kirim ${bytes.size} byte lewat ${shortUuid(activeUuid)}")
                 val output = active.outputStream
                 var offset = 0
+                var chunks = 0
                 while (offset < bytes.size) {
                     val end = minOf(offset + CHUNK_SIZE, bytes.size)
                     output.write(bytes, offset, end - offset)
                     output.flush()
                     offset = end
+                    chunks++
                     if (offset < bytes.size) Thread.sleep(CHUNK_DELAY_MS)
                 }
+                Log.d(TAG, "print: $chunks chunk terkirim, menunggu settle")
                 Thread.sleep(SETTLE_AFTER_CONNECT_MS)
 
-                val offline = isOffline(active)
-                if (offline) {
+                val after = queryStatus(active)
+                Log.d(TAG, "print: status akhir 0x${hex(after)}")
+                if (after != null && (after.toInt() and OFFLINE_BIT) != 0) {
                     postError(result, "printer_offline", "Printer menjadi offline saat mencetak")
                 } else {
                     postSuccess(result, mapOf("bytes" to bytes.size, "uuid" to activeUuid))
                 }
             } catch (error: Exception) {
+                Log.e(TAG, "print: gagal -> ${error.javaClass.simpleName}: ${error.message}")
                 closeSocket()
                 postError(
                     result,
@@ -242,9 +258,9 @@ class BluetoothPrinterPlugin(
         }
     }
 
-    private fun isOffline(target: BluetoothSocket): Boolean {
-        val status = queryStatus(target) ?: return false
-        return (status.toInt() and OFFLINE_BIT) != 0
+    private fun hex(value: Byte?): String {
+        if (value == null) return "TIMEOUT"
+        return String.format("%02X", value)
     }
 
     private fun queryStatus(target: BluetoothSocket): Byte? {
@@ -270,7 +286,7 @@ class BluetoothPrinterPlugin(
         }
     }
 
-    private fun shortUuid(uuid: String): String = uuid.substring(0, 8).uppercase()
+    private fun shortUuid(uuid: String?): String = (uuid ?: "-").substring(0, 8).uppercase()
 
     private fun closeQuietly(target: BluetoothSocket?) {
         try {
