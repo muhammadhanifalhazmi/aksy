@@ -386,7 +386,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late final TextEditingController _stock;
   late final TextEditingController _batchNumber;
   DateTime? _expiryDate;
-  IconData _icon = Icons.inventory_2;
+  IconData _icon = ProductIcons.fallback;
   String? _imagePath;
 
   bool get _hasWholesale => _wholesalePrice.text.isNotEmpty;
@@ -409,7 +409,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _stock = TextEditingController(text: p?.stock.toString() ?? '0');
     _batchNumber = TextEditingController(text: p?.batchNumber ?? '');
     _expiryDate = p?.expiryDate;
-    _icon = p?.icon ?? _icon;
+    _icon = p?.icon ?? ProductIcons.fallback;
     _imagePath = p?.imagePath;
   }
 

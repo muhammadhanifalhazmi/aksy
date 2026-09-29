@@ -273,6 +273,34 @@ class _GuideSection {
       ],
     ),
     _GuideSection(
+      icon: Icons.print_outlined,
+      title: 'Printer Termal Bluetooth',
+      description:
+          'Cetak struk langsung ke printer thermal 58mm atau 80mm tanpa '
+          'perlu aplikasi cetak Android.',
+      steps: [
+        'Nyalakan printer, lalu pairingkan lewat pengaturan Bluetooth ponsel '
+            '(tekan "Pengaturan BT" untuk membuka pengaturan sistem).',
+        'Buka menu Printer Termal, tekan "Cari Printer", lalu pilih printer '
+            'yang muncul.',
+        'Uji koneksi dengan ikon cetak pada printer yang dipilih. Pastikan '
+            'struk keluar sesuai lebar kertas printer.',
+        'Pilih lebar kertas 58mm atau 80mm dan jumlah salinan sesuai '
+            'kebutuhan.',
+        'Aktifkan "Cetak otomatis setelah pembayaran" agar struk langsung '
+            'keluar begitu pembayaran selesai.',
+        'Cetak ulang kapan saja dari pratinjau struk lewat tombol "Cetak ke '
+            '...".',
+      ],
+      tips: [
+        'Hanya perangkat Android yang bisa mencetak lewat Bluetooth.',
+        'Bila printer gagal merespons, transaksi tetap tersimpan. Gunakan '
+            '"Coba Lagi" atau cetak ulang dari pratinjau struk.',
+        'Karakter di luar latin-1 yang tidak didukung printer akan tampil '
+            'sebagai tanda tanya.',
+      ],
+    ),
+    _GuideSection(
       icon: Icons.settings_outlined,
       title: 'Pengaturan & Cadangan Data',
       description:
@@ -281,6 +309,8 @@ class _GuideSection {
       steps: [
         'Buka menu Pengaturan untuk mengisi nama toko, alamat, dan telepon. '
             'Identitas ini dipakai di kepala struk dan laporan PDF.',
+        'Pengaturan Printer Termal juga tersedia di menu Pengaturan, menampilkan '
+            'printer yang sedang dipilih dan lebar kartasnya.',
         'Isi pesan bawah struk (opsional), misalnya syarat dan ketentuan toko.',
         'Gunakan "Cadangkan Data" untuk menyimpan seluruh data ke file .json, '
             'lalu simpan/bagikan ke tempat aman.',

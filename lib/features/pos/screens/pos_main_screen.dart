@@ -9,6 +9,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/app_navigation_drawer.dart';
 import '../../../core/widgets/barcode_scanner_screen.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../printer/services/print_receipt_action.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
@@ -1011,6 +1012,39 @@ Future<void> _showPaymentDialog(
                                           ),
                                         ),
                                       );
+                                    }
+                                    if (!screenContext.mounted) return;
+                                    if (store.printer.autoPrint &&
+                                        store.printer.isConfigured) {
+                                      Future<void> retry() =>
+                                          printReceiptManually(
+                                            context: screenContext,
+                                            store: store,
+                                            order: order,
+                                          );
+                                      final printed = await printReceiptSilently(
+                                        context: screenContext,
+                                        store: store,
+                                        order: order,
+                                      );
+                                      if (!screenContext.mounted) return;
+                                      if (printed) {
+                                        ScaffoldMessenger.of(screenContext)
+                                            .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Struk dicetak ke '
+                                                  '${store.printer.deviceName}',
+                                                ),
+                                              ),
+                                            );
+                                      } else {
+                                        await showPrintFailureDialog(
+                                          screenContext,
+                                          message: 'Printer tidak merespons',
+                                          onRetry: retry,
+                                        );
+                                      }
                                     }
                                     if (screenContext.mounted) {
                                       await showReceiptPreview(

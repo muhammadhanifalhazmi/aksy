@@ -7,6 +7,7 @@ import '../../features/cash_flow/models/cash_entry.dart';
 import '../../features/debt/models/debt.dart';
 import '../../features/pos/models/order.dart';
 import '../../features/pos/models/product.dart';
+import '../../features/printer/models/printer_settings.dart';
 import '../../features/shift/models/shift_record.dart';
 import 'store_settings.dart';
 
@@ -22,6 +23,7 @@ class AppStore extends ChangeNotifier {
   static const _kShifts = 'store.shifts';
   static const _kActiveShift = 'store.active_shift';
   static const _kSettings = 'store.settings';
+  static const _kPrinter = 'store.printer';
   static const _backupVersion = 1;
 
   static Future<AppStore> load() async {
@@ -43,6 +45,7 @@ class AppStore extends ChangeNotifier {
   final List<ShiftRecord> _shifts = [];
   ShiftRecord? _activeShift;
   StoreSettings _settings = const StoreSettings();
+  PrinterSettings _printer = const PrinterSettings();
 
   List<Product> get products => List.unmodifiable(_products);
   List<Order> get orders => List.unmodifiable(_orders);
@@ -51,6 +54,7 @@ class AppStore extends ChangeNotifier {
   List<ShiftRecord> get shifts => List.unmodifiable(_shifts);
   ShiftRecord? get activeShift => _activeShift;
   StoreSettings get settings => _settings;
+  PrinterSettings get printer => _printer;
 
   List<String> get categories {
     final seen = <String>{};
@@ -108,6 +112,16 @@ class AppStore extends ChangeNotifier {
         _settings = const StoreSettings();
       }
     }
+    final printerRaw = prefs.getString(_kPrinter);
+    if (printerRaw != null && printerRaw.isNotEmpty) {
+      try {
+        _printer = PrinterSettings.fromJson(
+          jsonDecode(printerRaw) as Map<String, dynamic>,
+        );
+      } catch (_) {
+        _printer = const PrinterSettings();
+      }
+    }
   }
 
   void _save() {
@@ -131,10 +145,17 @@ class AppStore extends ChangeNotifier {
       _activeShift == null ? '' : jsonEncode(_activeShift!.toJson()),
     );
     prefs.setString(_kSettings, jsonEncode(_settings.toJson()));
+    prefs.setString(_kPrinter, jsonEncode(_printer.toJson()));
   }
 
   void updateStoreSettings(StoreSettings settings) {
     _settings = settings;
+    _save();
+    notifyListeners();
+  }
+
+  void updatePrinterSettings(PrinterSettings printer) {
+    _printer = printer;
     _save();
     notifyListeners();
   }
@@ -514,6 +535,7 @@ class AppStore extends ChangeNotifier {
       'version': _backupVersion,
       'exportedAt': DateTime.now().toIso8601String(),
       'settings': _settings.toJson(),
+      'printer': _printer.toJson(),
       'products': _products.map((p) => p.toJson()).toList(),
       'orders': _orders.map((o) => o.toJson()).toList(),
       'cashEntries': _cashEntries.map((e) => e.toJson()).toList(),
@@ -545,6 +567,9 @@ class AppStore extends ChangeNotifier {
           : ShiftRecord.fromJson(
               (data['activeShift'] as Map).cast<String, dynamic>(),
             );
+      final printer = PrinterSettings.fromJson(
+        (data['printer'] as Map?)?.cast<String, dynamic>() ?? const {},
+      );
 
       _products
         ..clear()
@@ -562,6 +587,7 @@ class AppStore extends ChangeNotifier {
         ..clear()
         ..addAll(shifts);
       _settings = settings;
+      _printer = printer;
       _activeShift = activeShift;
       _save();
       notifyListeners();

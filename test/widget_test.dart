@@ -6,6 +6,7 @@ import 'package:aksy/core/widgets/app_navigation_drawer.dart';
 import 'package:aksy/features/debt/models/debt.dart';
 import 'package:aksy/features/pos/models/product.dart';
 import 'package:aksy/features/pos/providers/cart_provider.dart';
+import 'package:aksy/features/printer/models/printer_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -112,6 +113,10 @@ void main() {
       expect(find.text('Hutang & Piutang'), findsOneWidget);
       await selectDestination('Shift Kasir');
       expect(find.text('Shift Kasir'), findsOneWidget);
+      await selectDestination('Printer Termal');
+      expect(find.text('Printer Termal'), findsOneWidget);
+      await selectDestination('Pengaturan');
+      expect(find.text('Pengaturan'), findsOneWidget);
       await selectDestination('Laporan');
       expect(find.text('Laporan'), findsOneWidget);
 
@@ -463,6 +468,36 @@ void main() {
       expect(store.settings.name, 'Aplikasi Kasir Easy');
       expect(store.settings.address, '');
       expect(store.settings.phone, '');
+    });
+
+    test('printer settings persist through SharedPreferences', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      AppStore.fromPrefs(prefs).updatePrinterSettings(
+        const PrinterSettings(
+          deviceAddress: '00:11:22:33:44:55',
+          deviceName: 'Rongta RP58',
+          wide: true,
+          autoPrint: true,
+          copies: 2,
+        ),
+      );
+
+      final restored = AppStore.fromPrefs(prefs);
+      expect(restored.printer.deviceAddress, '00:11:22:33:44:55');
+      expect(restored.printer.deviceName, 'Rongta RP58');
+      expect(restored.printer.wide, isTrue);
+      expect(restored.printer.autoPrint, isTrue);
+      expect(restored.printer.copies, 2);
+    });
+
+    test('printer settings default to unconfigured', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = AppStore.fromPrefs(prefs);
+      expect(store.printer.isConfigured, isFalse);
+      expect(store.printer.autoPrint, isFalse);
+      expect(store.printer.copies, 1);
     });
   });
 

@@ -4,6 +4,10 @@ import 'package:printing/printing.dart';
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../printer/models/bluetooth_printer_device.dart';
+import '../../printer/models/printer_settings.dart';
+import '../../printer/services/print_receipt_action.dart';
+import '../../printer/services/thermal_printer_service.dart';
 import '../models/cart_item.dart';
 import '../models/order.dart';
 import '../services/receipt_pdf_generator.dart';
@@ -12,10 +16,15 @@ Future<void> showReceiptPreview(
   BuildContext context, {
   required Order order,
   required AppStore store,
+  ThermalPrinterService? printerService,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => ReceiptPreviewDialog(order: order, store: store),
+    builder: (_) => ReceiptPreviewDialog(
+      order: order,
+      store: store,
+      printerService: printerService,
+    ),
   );
 }
 
@@ -24,10 +33,12 @@ class ReceiptPreviewDialog extends StatefulWidget {
     super.key,
     required this.order,
     required this.store,
+    this.printerService,
   });
 
   final Order order;
   final AppStore store;
+  final ThermalPrinterService? printerService;
 
   @override
   State<ReceiptPreviewDialog> createState() => _ReceiptPreviewDialogState();
@@ -36,6 +47,15 @@ class ReceiptPreviewDialog extends StatefulWidget {
 class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
   bool _wide = false;
   bool _busy = false;
+  bool _thermalBusy = false;
+
+  ThermalPrinterService get _printer =>
+      widget.printerService ?? ThermalPrinterService();
+
+  PrinterSettings get _printerSettings => widget.store.printer;
+
+  bool get _canPrintThermal =>
+      _printer.isSupported && _printerSettings.isConfigured;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +130,26 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
                   ),
                 ),
               ),
+              if (_canPrintThermal) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _thermalBusy ? null : _printThermal,
+                    icon: _thermalBusy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.print_outlined),
+                    label: Text(
+                      'Cetak ke ${_printerSettings.deviceName}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -210,6 +250,33 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
       _Row(left: 'Tunai', right: CurrencyFormatter.formatIDR(order.paidAmount)),
       _Row(left: 'Kembalian', right: CurrencyFormatter.formatIDR(order.change)),
     ];
+  }
+
+  Future<void> _printThermal() async {
+    if (_thermalBusy) return;
+    setState(() => _thermalBusy = true);
+    try {
+      await _printer.printReceipt(
+        settings: _printerSettings,
+        store: widget.store,
+        order: widget.order,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Struk dikirim ke ${_printerSettings.deviceName}'),
+        ),
+      );
+    } on PrinterException catch (error) {
+      if (!mounted) return;
+      await showPrintFailureDialog(
+        context,
+        message: error.message,
+        onRetry: _printThermal,
+      );
+    } finally {
+      if (mounted) setState(() => _thermalBusy = false);
+    }
   }
 
   Future<void> _share() => _exportReceipt(isPrint: false);

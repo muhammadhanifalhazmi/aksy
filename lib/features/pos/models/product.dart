@@ -1,5 +1,67 @@
 import 'package:flutter/material.dart';
 
+abstract final class ProductIcons {
+  static const List<IconData> catalog = [
+    Icons.inventory_2,
+    Icons.local_drink,
+    Icons.lunch_dining,
+    Icons.cookie_outlined,
+    Icons.shopping_basket_outlined,
+    Icons.cleaning_services_outlined,
+    Icons.checkroom_outlined,
+    Icons.face_retouching_natural,
+    Icons.card_giftcard,
+    Icons.spa_outlined,
+    Icons.pets,
+    Icons.home_outlined,
+    Icons.local_hospital_outlined,
+    Icons.fitness_center,
+    Icons.menu_book_outlined,
+    Icons.devices_other,
+    Icons.category_outlined,
+  ];
+
+  static const IconData fallback = Icons.inventory_2;
+
+  static IconData fromCodePoint(int? codePoint) {
+    return switch (codePoint) {
+      final int code when code == Icons.local_drink.codePoint =>
+        Icons.local_drink,
+      final int code when code == Icons.lunch_dining.codePoint =>
+        Icons.lunch_dining,
+      final int code when code == Icons.cookie_outlined.codePoint =>
+        Icons.cookie_outlined,
+      final int code when code == Icons.shopping_basket_outlined.codePoint =>
+        Icons.shopping_basket_outlined,
+      final int code
+          when code == Icons.cleaning_services_outlined.codePoint =>
+          Icons.cleaning_services_outlined,
+      final int code when code == Icons.checkroom_outlined.codePoint =>
+        Icons.checkroom_outlined,
+      final int code when code == Icons.face_retouching_natural.codePoint =>
+        Icons.face_retouching_natural,
+      final int code when code == Icons.card_giftcard.codePoint =>
+        Icons.card_giftcard,
+      final int code when code == Icons.spa_outlined.codePoint =>
+        Icons.spa_outlined,
+      final int code when code == Icons.pets.codePoint => Icons.pets,
+      final int code when code == Icons.home_outlined.codePoint =>
+        Icons.home_outlined,
+      final int code when code == Icons.local_hospital_outlined.codePoint =>
+        Icons.local_hospital_outlined,
+      final int code when code == Icons.fitness_center.codePoint =>
+        Icons.fitness_center,
+      final int code when code == Icons.menu_book_outlined.codePoint =>
+        Icons.menu_book_outlined,
+      final int code when code == Icons.devices_other.codePoint =>
+        Icons.devices_other,
+      final int code when code == Icons.category_outlined.codePoint =>
+        Icons.category_outlined,
+      _ => fallback,
+    };
+  }
+}
+
 class Product {
   const Product({
     required this.id,
@@ -23,7 +85,7 @@ class Product {
       name: json['name'] as String,
       price: json['price'] as int,
       category: json['category'] as String? ?? 'Umum',
-      icon: IconData(json['icon'] as int),
+      icon: ProductIcons.fromCodePoint(json['icon'] as int?),
       wholesalePrice: json['wholesalePrice'] as int?,
       minWholesaleQty: json['minWholesaleQty'] as int?,
       costPrice: json['costPrice'] as int?,

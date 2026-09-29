@@ -178,6 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final store = AppScope.of(context);
     return Scaffold(
       drawer: AppNavigationDrawer(
         selectedDestination: widget.selectedDestination,
@@ -247,6 +248,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     label: const Text('Simpan Identitas Toko'),
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const SectionHeader(title: 'Printer'),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 6,
+              ),
+              leading: CircleAvatar(
+                backgroundColor: theme.colorScheme.primary.withValues(
+                  alpha: 0.12,
+                ),
+                child: Icon(
+                  Icons.print_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              title: const Text('Printer Termal'),
+              subtitle: Text(
+                store.printer.isConfigured
+                    ? '${store.printer.deviceName} · '
+                          '${store.printer.wide ? '80' : '58'}mm'
+                          '${store.printer.autoPrint ? ' · cetak otomatis' : ''}'
+                    : 'Belum ada printer bluetooth yang dipilih',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => widget.onDestinationSelected(
+                AppDestination.printer,
               ),
             ),
           ),
