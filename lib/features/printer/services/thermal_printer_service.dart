@@ -41,15 +41,23 @@ class ThermalPrinterService {
   }
 
   String _friendlyMessage(PlatformException error) {
-    return switch (error.code) {
+    final base = switch (error.code) {
       'permission_denied' => 'Izin Bluetooth belum diberikan',
       'not_paired' => 'Printer belum dipairingkan dengan perangkat ini',
       'not_connected' => 'Printer belum terhubung',
-      'connect_failed' => 'Gagal terhubung ke printer, pastikan printer menyala',
+      'connect_failed' =>
+        'Printer tidak merespons. Pastikan printer menyala, batteries cukup, '
+            'dan sudah pairing di pengaturan Bluetooth.',
       'print_failed' => 'Gagal mengirim data ke printer',
+      'printer_offline' => 'Printer menjadi offline saat mencetak',
       'invalid_address' => 'Printer yang dipilih tidak valid',
       _ => 'Terjadi kesalahan pada printer',
     };
+    final details = error.details;
+    if (details is String && details.trim().isNotEmpty) {
+      return '$base\n\nDetail: $details';
+    }
+    return base;
   }
 
   Future<bool> hasPermissions() => _invokeBool('hasPermissions');
@@ -111,7 +119,11 @@ class ThermalPrinterService {
 
   Future<void> printBytes(Uint8List bytes) async {
     await _ensureSupported();
-    await _guard(() => _channel.invokeMethod<int>('print', {'bytes': bytes}));
+    await _guard(
+      () => _channel.invokeMethod<Map<Object?, Object?>>('print', {
+        'bytes': bytes,
+      }),
+    );
   }
 
   Future<void> printReceipt({
@@ -121,12 +133,20 @@ class ThermalPrinterService {
   }) {
     return _print(
       settings,
-      buildReceiptEscPos(order: order, store: store, wide: settings.wide),
+      buildReceiptEscPos(
+        order: order,
+        store: store,
+        wide: settings.wide,
+        cut: settings.cut,
+      ),
     );
   }
 
   Future<void> printTest(PrinterSettings settings) {
-    return _print(settings, buildTestEscPos(wide: settings.wide));
+    return _print(
+      settings,
+      buildTestEscPos(wide: settings.wide, cut: settings.cut),
+    );
   }
 
   Future<void> _print(PrinterSettings settings, Uint8List bytes) async {

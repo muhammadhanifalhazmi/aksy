@@ -276,6 +276,17 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   ),
                 ),
                 const Divider(height: 1),
+                SwitchListTile(
+                  value: printer.cut,
+                  onChanged: (value) => _update(
+                    (current) => current.copyWith(cut: value),
+                  ),
+                  title: const Text('Potong kertas otomatis'),
+                  subtitle: const Text(
+                    'Matikan bila printer tidak memiliki pemotong kertas (cutter)',
+                  ),
+                ),
+                const Divider(height: 1),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

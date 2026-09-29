@@ -5,6 +5,7 @@ class PrinterSettings {
     this.wide = false,
     this.autoPrint = false,
     this.copies = 1,
+    this.cut = true,
   });
 
   factory PrinterSettings.fromJson(Map<String, dynamic> json) {
@@ -14,6 +15,7 @@ class PrinterSettings {
       wide: json['wide'] as bool? ?? false,
       autoPrint: json['autoPrint'] as bool? ?? false,
       copies: json['copies'] as int? ?? 1,
+      cut: json['cut'] as bool? ?? true,
     );
   }
 
@@ -24,6 +26,7 @@ class PrinterSettings {
       'wide': wide,
       'autoPrint': autoPrint,
       'copies': copies,
+      'cut': cut,
     };
   }
 
@@ -32,6 +35,7 @@ class PrinterSettings {
   final bool wide;
   final bool autoPrint;
   final int copies;
+  final bool cut;
 
   bool get isConfigured => deviceAddress.isNotEmpty;
 
@@ -41,6 +45,7 @@ class PrinterSettings {
     bool? wide,
     bool? autoPrint,
     int? copies,
+    bool? cut,
   }) {
     return PrinterSettings(
       deviceAddress: deviceAddress ?? this.deviceAddress,
@@ -48,6 +53,7 @@ class PrinterSettings {
       wide: wide ?? this.wide,
       autoPrint: autoPrint ?? this.autoPrint,
       copies: copies ?? this.copies,
+      cut: cut ?? this.cut,
     );
   }
 }

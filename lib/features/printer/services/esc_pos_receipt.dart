@@ -67,6 +67,7 @@ Uint8List buildReceiptEscPos({
   required Order order,
   required AppStore store,
   required bool wide,
+  bool cut = true,
 }) {
   final cols = receiptColumns(wide: wide);
   final lines = buildReceiptLines(order: order, store: store, cols: cols);
@@ -82,13 +83,15 @@ Uint8List buildReceiptEscPos({
   builder
     ..align(ReceiptAlign.left)
     ..bold(on: false)
-    ..feed(2)
-    ..cut();
+    ..feed(3);
+  if (cut) {
+    builder.cut();
+  }
 
   return builder.build();
 }
 
-Uint8List buildTestEscPos({bool wide = false}) {
+Uint8List buildTestEscPos({bool wide = false, bool cut = true}) {
   final cols = receiptColumns(wide: wide);
   final builder = EscPosBuilder(columns: cols)..initialize()
     ..align(ReceiptAlign.center)
@@ -102,8 +105,10 @@ Uint8List buildTestEscPos({bool wide = false}) {
     ..line('-' * cols)
     ..line('Printer termal siap digunakan')
     ..line('Lebar: ${wide ? '80' : '58'}mm - $cols karakter')
-    ..feed(2)
-    ..cut();
+    ..feed(3);
+  if (cut) {
+    builder.cut();
+  }
 
   return builder.build();
 }

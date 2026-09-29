@@ -2,7 +2,7 @@ package com.example.aksy
 
 import android.Manifest
 import android.app.Activity
-import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
@@ -19,6 +19,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class BluetoothPrinterPlugin(
     private val context: Context,
@@ -27,14 +28,27 @@ class BluetoothPrinterPlugin(
 
     companion object {
         const val CHANNEL = "com.example.aksy/printer"
-        private const val SPP_UUID = "00001101-0000-1000-8000-00805F9B34FB"
         private const val PERMISSION_REQUEST_CODE = 0xB7
+        private const val CHUNK_SIZE = 256
+        private const val CHUNK_DELAY_MS = 20L
+        private const val SETTLE_AFTER_CONNECT_MS = 300L
+        private const val STATUS_TIMEOUT_MS = 600
+        private const val OFFLINE_BIT = 0x08
+
+        private val SPP_UUIDS = listOf(
+            "00001101-0000-1000-8000-00805F9B34FB",
+            "0000FF00-0000-1000-8000-00805F9B34FB",
+            "0000FFE0-0000-1000-8000-00805F9B34FB",
+            "0000110E-0000-1000-8000-00805F9B34FB"
+        )
     }
 
     private val channel = MethodChannel(messenger, CHANNEL)
     private val worker = Executors.newSingleThreadExecutor()
+    private val readPool = Executors.newCachedThreadPool()
     private val handler = Handler(Looper.getMainLooper())
     private var socket: BluetoothSocket? = null
+    private var activeUuid: String? = null
     private var pendingPermission: MethodChannel.Result? = null
 
     init {
@@ -44,6 +58,7 @@ class BluetoothPrinterPlugin(
     fun dispose() {
         closeSocket()
         worker.shutdown()
+        readPool.shutdownNow()
         channel.setMethodCallHandler(null)
     }
 
@@ -107,27 +122,19 @@ class BluetoothPrinterPlugin(
             return
         }
         pendingPermission = result
-        ActivityCompat.requestPermissions(
-            activity,
-            requiredPermissions(),
-            PERMISSION_REQUEST_CODE
-        )
+        ActivityCompat.requestPermissions(activity, requiredPermissions(), PERMISSION_REQUEST_CODE)
     }
 
-    private fun adapter(): BluetoothAdapter? {
-        val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        return manager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
-    }
+    private fun adapter() = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
-    private fun isBluetoothAvailable(): Boolean {
-        return hasPermissions() && adapter()?.isEnabled == true
-    }
+    private fun isBluetoothAvailable(): Boolean = hasPermissions() && adapter()?.isEnabled == true
 
     private fun openBluetoothSettings() {
-        val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
+        context.startActivity(
+            Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        )
     }
 
     private fun listPairedDevices(result: MethodChannel.Result) {
@@ -136,12 +143,7 @@ class BluetoothPrinterPlugin(
             return
         }
         val devices = adapter()?.bondedDevices.orEmpty()
-            .map { device ->
-                mapOf(
-                    "name" to (device.name ?: "Printer"),
-                    "address" to device.address
-                )
-            }
+            .map { mapOf("name" to (it.name ?: "Printer"), "address" to it.address) }
             .sortedBy { it["name"] as String }
         result.success(devices)
     }
@@ -161,23 +163,40 @@ class BluetoothPrinterPlugin(
             return
         }
         worker.execute {
-            try {
-                closeSocket()
-                val socket = device.createRfcommSocketToServiceRecord(
-                    UUID.fromString(SPP_UUID)
-                )
-                adapter()?.cancelDiscovery()
-                socket.connect()
-                this.socket = socket
-                postSuccess(result)
-            } catch (error: Exception) {
-                closeSocket()
-                postError(
-                    result,
-                    "connect_failed",
-                    error.message ?: "Gagal terhubung ke printer"
-                )
+            closeSocket()
+            adapter()?.cancelDiscovery()
+            val failures = mutableListOf<String>()
+
+            for (uuid in SPP_UUIDS) {
+                var candidate: BluetoothSocket? = null
+                try {
+                    candidate = device.createRfcommSocketToServiceRecord(UUID.fromString(uuid))
+                    candidate.connect()
+                    Thread.sleep(SETTLE_AFTER_CONNECT_MS)
+
+                    if (queryStatus(candidate) == null) {
+                        closeQuietly(candidate)
+                        failures += "${shortUuid(uuid)} tidak merespons"
+                        continue
+                    }
+
+                    socket = candidate
+                    activeUuid = uuid
+                    postSuccess(result, mapOf("uuid" to uuid))
+                    return@execute
+                } catch (error: Exception) {
+                    closeQuietly(candidate)
+                    failures += "${shortUuid(uuid)}: ${error.message ?: "gagal"}"
+                }
             }
+
+            postError(
+                result,
+                "connect_failed",
+                "Printer tidak merespons pada channel mana pun. " +
+                    "Pastikan printer menyala dan sudah pairing.",
+                failures.joinToString(" | ")
+            )
         }
     }
 
@@ -195,33 +214,82 @@ class BluetoothPrinterPlugin(
         worker.execute {
             try {
                 val output = active.outputStream
-                output.write(bytes)
-                output.flush()
-                postSuccess(result, bytes.size)
+                var offset = 0
+                while (offset < bytes.size) {
+                    val end = minOf(offset + CHUNK_SIZE, bytes.size)
+                    output.write(bytes, offset, end - offset)
+                    output.flush()
+                    offset = end
+                    if (offset < bytes.size) Thread.sleep(CHUNK_DELAY_MS)
+                }
+                Thread.sleep(SETTLE_AFTER_CONNECT_MS)
+
+                val offline = isOffline(active)
+                if (offline) {
+                    postError(result, "printer_offline", "Printer menjadi offline saat mencetak")
+                } else {
+                    postSuccess(result, mapOf("bytes" to bytes.size, "uuid" to activeUuid))
+                }
             } catch (error: Exception) {
                 closeSocket()
                 postError(
                     result,
                     "print_failed",
-                    error.message ?: "Gagal mengirim data ke printer"
+                    error.message ?: "Gagal mengirim data ke printer",
+                    activeUuid
                 )
             }
         }
     }
 
-    private fun closeSocket() {
+    private fun isOffline(target: BluetoothSocket): Boolean {
+        val status = queryStatus(target) ?: return false
+        return (status.toInt() and OFFLINE_BIT) != 0
+    }
+
+    private fun queryStatus(target: BluetoothSocket): Byte? {
         try {
-            socket?.close()
+            target.outputStream.write(byteArrayOf(0x10, 0x04, 0x01))
+            target.outputStream.flush()
+        } catch (_: Exception) {
+            return null
+        }
+        val pending = readPool.submit<Byte?> {
+            try {
+                val response = target.inputStream.read()
+                if (response < 0) null else response.toByte()
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return try {
+            pending.get(STATUS_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {
+            pending.cancel(true)
+            null
+        }
+    }
+
+    private fun shortUuid(uuid: String): String = uuid.substring(0, 8).uppercase()
+
+    private fun closeQuietly(target: BluetoothSocket?) {
+        try {
+            target?.close()
         } catch (_: Exception) {
         }
+    }
+
+    private fun closeSocket() {
+        closeQuietly(socket)
         socket = null
+        activeUuid = null
     }
 
     private fun postSuccess(result: MethodChannel.Result, value: Any? = true) {
         handler.post { result.success(value) }
     }
 
-    private fun postError(result: MethodChannel.Result, code: String, message: String) {
-        handler.post { result.error(code, message, null) }
+    private fun postError(result: MethodChannel.Result, code: String, message: String, details: Any? = null) {
+        handler.post { result.error(code, message, details) }
     }
 }
