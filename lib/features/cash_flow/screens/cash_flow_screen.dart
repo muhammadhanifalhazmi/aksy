@@ -99,7 +99,18 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final entry = entries[index];
-                      return _CashCard(entry: entry);
+                      return _CashCard(
+                        entry: entry,
+                        onEdit: entry.isEditable
+                            ? () => _showForm(context, store, entry: entry)
+                            : null,
+                        onDelete: entry.isEditable
+                            ? () => _confirmDelete(context, store, entry)
+                            : null,
+                        onLocked: entry.isEditable
+                            ? null
+                            : () => _showLocked(context, entry),
+                      );
                     },
                   ),
           ),
@@ -108,20 +119,76 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
     );
   }
 
-  Future<void> _showForm(BuildContext context, AppStore store) {
+  Future<void> _showForm(
+    BuildContext context,
+    AppStore store, {
+    CashEntry? entry,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _CashFormSheet(store: store),
+      builder: (_) => _CashFormSheet(store: store, existing: entry),
+    );
+  }
+
+  void _showLocked(BuildContext context, CashEntry entry) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(entry.source.lockedReason ?? 'Catatan terkunci'),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    AppStore store,
+    CashEntry entry,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus catatan kas?'),
+        content: Text(
+          '${entry.category} sebesar '
+          '${CurrencyFormatter.formatIDR(entry.amount)} akan dihapus dari '
+          '${entry.type.label} dan laporan kas ikut berubah. '
+          'Tindakan ini tidak bisa dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    store.removeCashEntry(entry.id);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Catatan ${entry.category} dihapus')),
     );
   }
 }
 
 class _CashCard extends StatelessWidget {
-  const _CashCard({required this.entry});
+  const _CashCard({
+    required this.entry,
+    this.onEdit,
+    this.onDelete,
+    this.onLocked,
+  });
 
   final CashEntry entry;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback? onLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -147,12 +214,53 @@ class _CashCard extends StatelessWidget {
               ? '${entry.note} · ${DateFormatter.when(entry.createdAt)}'
               : DateFormatter.when(entry.createdAt),
         ),
-        trailing: Text(
-          '${isIn ? '+' : '-'}${CurrencyFormatter.formatIDR(entry.amount)}',
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w800,
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${isIn ? '+' : '-'}${CurrencyFormatter.formatIDR(entry.amount)}',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (onEdit != null && onDelete != null)
+              PopupMenuButton<String>(
+                tooltip: 'Ubah catatan',
+                onSelected: (value) {
+                  if (value == 'edit') onEdit!();
+                  if (value == 'delete') onDelete!();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: ListTile(
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Ubah'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline),
+                      title: Text('Hapus'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              )
+            else
+              IconButton(
+                tooltip: 'Catatan otomatis',
+                onPressed: onLocked,
+                icon: Icon(
+                  Icons.lock_outline,
+                  size: 18,
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -160,9 +268,10 @@ class _CashCard extends StatelessWidget {
 }
 
 class _CashFormSheet extends StatefulWidget {
-  const _CashFormSheet({required this.store});
+  const _CashFormSheet({required this.store, this.existing});
 
   final AppStore store;
+  final CashEntry? existing;
 
   @override
   State<_CashFormSheet> createState() => _CashFormSheetState();
@@ -192,6 +301,21 @@ class _CashFormSheetState extends State<_CashFormSheet> {
   List<String> get _categories =>
       _type == CashFlowType.cashIn ? _inCategories : _outCategories;
 
+  bool get _isEditing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    if (existing == null) return;
+    _type = existing.type;
+    _category = _categories.contains(existing.category)
+        ? existing.category
+        : _categories.first;
+    _amountController.text = existing.amount.toString();
+    _noteController.text = existing.note ?? '';
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -205,21 +329,39 @@ class _CashFormSheetState extends State<_CashFormSheet> {
       setState(() => _amountError = 'Nominal harus lebih dari 0');
       return;
     }
-    widget.store.addCashEntry(
-      CashEntry(
-        id: 'CF${DateTime.now().millisecondsSinceEpoch}',
+    final note = _noteController.text.trim();
+    final existing = widget.existing;
+    if (existing == null) {
+      widget.store.addCashEntry(
+        CashEntry(
+          id: widget.store.nextId('CF'),
+          type: _type,
+          amount: amount,
+          category: _category,
+          note: note.isEmpty ? null : note,
+          createdAt: DateTime.now(),
+        ),
+      );
+    } else {
+      final updated = existing.copyWith(
         type: _type,
         amount: amount,
         category: _category,
-        note: _noteController.text.trim().isEmpty
-            ? null
-            : _noteController.text.trim(),
-        createdAt: DateTime.now(),
-      ),
-    );
+        note: note.isEmpty ? '' : note,
+      );
+      if (!widget.store.updateCashEntry(updated)) {
+        setState(() => _amountError = 'Gagal menyimpan, catatan terkunci');
+        return;
+      }
+    }
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${_type.label} tercatat')),
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          _isEditing ? 'Catatan kas diperbarui' : '${_type.label} tercatat',
+        ),
+      ),
     );
   }
 
@@ -239,7 +381,7 @@ class _CashFormSheetState extends State<_CashFormSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Catat Kas',
+                _isEditing ? 'Ubah Catatan Kas' : 'Catat Kas',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),

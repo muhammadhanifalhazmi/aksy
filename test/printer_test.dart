@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aksy/core/data/app_store.dart';
+import 'package:aksy/core/data/store_settings.dart';
 import 'package:aksy/features/pos/models/cart_item.dart';
 import 'package:aksy/features/pos/models/order.dart';
 import 'package:aksy/features/pos/models/product.dart';
@@ -110,6 +111,41 @@ void main() {
       );
       final text = lines.map((l) => l.text).join('\n');
       expect(text, contains('Rp 3.000.000'));
+    });
+
+    test('every receipt carries the Aplikasi Kasir Easy branding once', () {
+      final store = AppStore(products: [drink])
+        ..updateStoreSettings(const StoreSettings(name: 'Toko Berkah'));
+      for (final wide in [true, false]) {
+        final cols = receiptColumns(wide: wide);
+        final lines = buildReceiptLines(
+          order: buildOrder(),
+          store: store,
+          cols: cols,
+        );
+        final text = lines.map((l) => l.text).join('\n');
+        expect(
+          '\n$text\n'.split(receiptBrandName).length - 1,
+          1,
+          reason: 'nama aplikasi harus muncul tepat satu kali',
+        );
+        expect(text, contains(receiptBrandTagline));
+
+        final brand = lines.lastWhere((l) => l.text.contains(receiptBrandName));
+        expect(brand.align, ReceiptAlign.center);
+        expect(brand.bold, isTrue);
+        expect(brand.text.length, lessThanOrEqualTo(cols));
+      }
+    });
+
+    test('receiptBrandLines has a blank spacer line and fits narrow paper', () {
+      final lines = receiptBrandLines(receiptColumns(wide: false));
+      expect(lines.first.text, isEmpty);
+      expect(lines, hasLength(3));
+      for (final line in lines) {
+        expect(line.lineCount, 1);
+        expect(line.text.length, lessThanOrEqualTo(32));
+      }
     });
 
     test('discount row is hidden when there is no discount', () {

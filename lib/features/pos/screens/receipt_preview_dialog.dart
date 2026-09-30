@@ -75,6 +75,8 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
     for (final text in receiptFooterLines(widget.store.settings.footer)) {
       lines.add(_CenterLine(text));
     }
+    lines.add(const SizedBox(height: 10));
+    lines.add(const _BrandBlock());
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -122,11 +124,16 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
                         ),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                      child: Stack(
                         children: [
-                          ...lines,
-                          const SizedBox(height: 8),
+                          const Positioned.fill(child: _BrandWatermark()),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ...lines,
+                              const SizedBox(height: 8),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -394,6 +401,66 @@ class _CenterLine extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w700,
           height: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandBlock extends StatelessWidget {
+  const _BrandBlock();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Image.asset(
+          receiptBrandAsset,
+          width: 46,
+          height: 46,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        ),
+        Text(
+          receiptBrandName,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        Text(
+          receiptBrandTagline,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.outline,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BrandWatermark extends StatelessWidget {
+  const _BrandWatermark();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: Transform.rotate(
+          angle: -0.5,
+          child: Opacity(
+            opacity: 0.07,
+            child: Image.asset(
+              receiptBrandAsset,
+              width: 190,
+              height: 190,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
         ),
       ),
     );

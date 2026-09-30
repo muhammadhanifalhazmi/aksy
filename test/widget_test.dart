@@ -138,6 +138,150 @@ void main() {
     });
   });
 
+  group('DebtScreen', () {
+    testWidgets('a debt record can be edited from the card menu', (
+      tester,
+    ) async {
+      final store = AppStore()
+        ..addDebt(
+          Debt(
+            id: 'D1',
+            type: DebtType.receivable,
+            partyName: 'Budi',
+            amount: 50000,
+            createdAt: DateTime.now(),
+          ),
+        );
+      await _pumpApp(tester, store: store);
+      await _openDestination(tester, 'Hutang & Piutang');
+
+      await tester.tap(find.byTooltip('Ubah catatan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ubah').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ubah Catatan'), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Nominal (Rp)'),
+        '75000',
+      );
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+
+      expect(store.debts.single.amount, 75000);
+      expect(store.debts.single.partyName, 'Budi');
+      expect(find.text('Rp 75.000'), findsWidgets);
+    });
+
+    testWidgets('deleting a debt asks for confirmation first', (tester) async {
+      final store = AppStore()
+        ..addDebt(
+          Debt(
+            id: 'D1',
+            type: DebtType.receivable,
+            partyName: 'Budi',
+            amount: 50000,
+            createdAt: DateTime.now(),
+          ),
+        );
+      await _pumpApp(tester, store: store);
+      await _openDestination(tester, 'Hutang & Piutang');
+
+      await tester.tap(find.byTooltip('Ubah catatan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hapus').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hapus catatan?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Batal'));
+      await tester.pumpAndSettle();
+      expect(store.debts, hasLength(1));
+
+      await tester.tap(find.byTooltip('Ubah catatan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hapus').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Hapus'));
+      await tester.pumpAndSettle();
+
+      expect(store.debts, isEmpty);
+      expect(find.text('Belum ada catatan'), findsOneWidget);
+    });
+  });
+
+  group('CashFlowScreen', () {
+    testWidgets('a manual cash entry can be edited and deleted', (
+      tester,
+    ) async {
+      final store = AppStore()
+        ..addCashEntry(
+          CashEntry(
+            id: 'CF1',
+            type: CashFlowType.cashIn,
+            amount: 50000,
+            category: 'Modal Masuk',
+            note: 'modal awal',
+            createdAt: DateTime.now(),
+          ),
+        );
+      await _pumpApp(tester, store: store);
+      await _openDestination(tester, 'Kas Masuk / Keluar');
+
+      await tester.tap(find.byTooltip('Ubah catatan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ubah').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ubah Catatan Kas'), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Nominal (Rp)'),
+        '45000',
+      );
+      await tester.tap(find.text('Simpan Catatan'));
+      await tester.pumpAndSettle();
+
+      expect(store.cashEntries.single.amount, 45000);
+      expect(find.text('+Rp 45.000'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Ubah catatan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hapus').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Hapus'));
+      await tester.pumpAndSettle();
+
+      expect(store.cashEntries, isEmpty);
+      expect(find.text('Belum ada catatan'), findsOneWidget);
+    });
+
+    testWidgets('automatic sale entries are locked with an explanation', (
+      tester,
+    ) async {
+      final store = AppStore();
+      final product = _product(
+        id: 'p1',
+        name: 'Es Teh',
+        price: 5000,
+        category: 'Minuman',
+        stock: 20,
+      );
+      store.addProduct(product);
+      (CartProvider()..addItem(product)).submitOrder(10000, store);
+      await _pumpApp(tester, store: store);
+      await _openDestination(tester, 'Kas Masuk / Keluar');
+
+      expect(find.byTooltip('Ubah catatan'), findsNothing);
+      await tester.tap(find.byTooltip('Catatan otomatis'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('dibuat otomatis dari penjualan'),
+        findsOneWidget,
+      );
+      expect(store.cashEntries, hasLength(1));
+    });
+  });
+
   group('InventoryScreen', () {
     testWidgets('deletes a product after confirmation', (tester) async {
       final product = _product(
@@ -149,15 +293,7 @@ void main() {
       final store = AppStore(products: [product]);
       final cart = CartProvider()..addItem(product);
 
-      await tester.pumpWidget(
-        AppScope(
-          store: store,
-          child: CartScope(
-            notifier: cart,
-            child: const MaterialApp(home: AppShellScreen()),
-          ),
-        ),
-      );
+      await _pumpApp(tester, store: store, cart: cart);
 
       await tester.tap(find.byTooltip('Inventori'));
       await tester.pumpAndSettle();
@@ -528,6 +664,182 @@ void main() {
         expect(store.cashInOn(DateTime.now()), 100000);
       },
     );
+
+    test('updateDebt changes the record but keeps payments intact', () {
+      final store = AppStore();
+      final debt = Debt(
+        id: 'd1',
+        type: DebtType.receivable,
+        partyName: 'Budi',
+        amount: 100000,
+        createdAt: DateTime.now().subtract(const Duration(days: 1)),
+      );
+      store.addDebt(debt);
+      store.recordDebtPayment('d1', 30000);
+
+      final updated = store.debts.single.copyWith(
+        partyName: 'Budi Santoso',
+        amount: 120000,
+        note: 'follow up minggu depan',
+      );
+      expect(store.updateDebt(updated), isTrue);
+
+      final saved = store.debts.single;
+      expect(saved.partyName, 'Budi Santoso');
+      expect(saved.amount, 120000);
+      expect(saved.remaining, 90000);
+      expect(saved.paidAmount, 30000);
+      expect(saved.payments, hasLength(1));
+      expect(saved.note, 'follow up minggu depan');
+    });
+
+    test('updateDebt refuses an amount below what was already paid', () {
+      final store = AppStore();
+      store.addDebt(
+        Debt(
+          id: 'd1',
+          type: DebtType.receivable,
+          partyName: 'Budi',
+          amount: 100000,
+          createdAt: DateTime.now(),
+        ),
+      );
+      store.recordDebtPayment('d1', 70000);
+
+      final broken = store.debts.single.copyWith(amount: 50000);
+      expect(store.updateDebt(broken), isFalse);
+      expect(store.debts.single.amount, 100000);
+    });
+
+    test('removeDebt also drops the cash entries it created', () {
+      final store = AppStore();
+      store.addDebt(
+        Debt(
+          id: 'd1',
+          type: DebtType.receivable,
+          partyName: 'Budi',
+          amount: 100000,
+          createdAt: DateTime.now(),
+        ),
+      );
+      store.recordDebtPayment('d1', 40000);
+      store.addCashEntry(
+        CashEntry(
+          id: 'CFmanual',
+          type: CashFlowType.cashIn,
+          amount: 5000,
+          category: 'Lainnya',
+          createdAt: DateTime.now(),
+        ),
+      );
+      expect(store.cashEntries, hasLength(2));
+
+      expect(store.removeDebt('d1'), isTrue);
+
+      expect(store.debts, isEmpty);
+      expect(store.cashEntries.single.id, 'CFmanual');
+      expect(store.removeDebt('d1'), isFalse);
+    });
+
+    test('automatic cash entries cannot be edited or deleted', () {
+      final store = AppStore();
+      final product = _product(
+        id: 'p1',
+        name: 'Es Teh',
+        price: 5000,
+        category: 'Minuman',
+        stock: 10,
+      );
+      store.addProduct(product);
+      (CartProvider()..addItem(product)).submitOrder(10000, store);
+      store.addDebt(
+        Debt(
+          id: 'd1',
+          type: DebtType.receivable,
+          partyName: 'Budi',
+          amount: 50000,
+          createdAt: DateTime.now(),
+        ),
+      );
+      store.recordDebtPayment('d1', 20000);
+
+      final sale = store.cashEntries.firstWhere((e) => e.category == 'Penjualan');
+      final payment =
+          store.cashEntries.firstWhere((e) => e.category == 'Pembayaran Piutang');
+      expect(sale.isEditable, isFalse);
+      expect(payment.isEditable, isFalse);
+      expect(payment.debtId, 'd1');
+
+      expect(store.updateCashEntry(sale.copyWith(amount: 1)), isFalse);
+      expect(store.removeCashEntry(payment.id), isFalse);
+      expect(store.cashEntries, hasLength(2));
+      expect(store.cashInOn(DateTime.now()), 25000);
+    });
+
+    test('manual cash entries can be edited and deleted', () {
+      final store = AppStore();
+      final entry = CashEntry(
+        id: 'CF1',
+        type: CashFlowType.cashOut,
+        amount: 50000,
+        category: 'Belanja Stok',
+        note: 'beli teh',
+        createdAt: DateTime.now(),
+      );
+      store.addCashEntry(entry);
+      expect(entry.isEditable, isTrue);
+
+      expect(
+        store.updateCashEntry(entry.copyWith(amount: 45000, note: 'teh + gula')),
+        isTrue,
+      );
+      expect(store.cashEntries.single.amount, 45000);
+      expect(store.cashEntries.single.note, 'teh + gula');
+
+      expect(store.removeCashEntry('CF1'), isTrue);
+      expect(store.cashEntries, isEmpty);
+      expect(store.removeCashEntry('CF1'), isFalse);
+    });
+
+    test('auto cash entries from legacy json without source stay editable', () {
+      final legacy = CashEntry.fromJson({
+        'id': 'CF1',
+        'type': 'cashOut',
+        'amount': 10000,
+        'category': 'Belanja Stok',
+        'createdAt': DateTime.now().toIso8601String(),
+        'note': null,
+      });
+      expect(legacy.isEditable, isTrue);
+
+      final sale = CashEntry.fromJson({
+        'id': 'CF2',
+        'type': 'cashIn',
+        'amount': 10000,
+        'category': 'Penjualan',
+        'createdAt': DateTime.now().toIso8601String(),
+        'note': null,
+      });
+      expect(sale.isEditable, isFalse);
+      expect(sale.source, CashEntrySource.sale);
+    });
+
+    test('nextId never collides inside the same millisecond', () {
+      final store = AppStore();
+      for (var i = 0; i < 50; i++) {
+        store.addCashEntry(
+          CashEntry(
+            id: store.nextId('CF'),
+            type: CashFlowType.cashIn,
+            amount: 1000,
+            category: 'Lainnya',
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+      expect(store.cashEntries, hasLength(50));
+      expect(store.cashEntries.map((e) => e.id).toSet(), hasLength(50));
+    });
 
     test('open/close shift computes expected cash and discrepancy', () {
       final product = _product(
@@ -936,6 +1248,29 @@ Product _product({
 }
 
 final Finder _cartPayButton = find.text('Bayar').first;
+
+Future<void> _openDestination(WidgetTester tester, String label) async {
+  await tester.tap(find.byIcon(Icons.menu));
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(NavigationDrawerDestination, label));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  required AppStore store,
+  CartProvider? cart,
+}) {
+  return tester.pumpWidget(
+    AppScope(
+      store: store,
+      child: CartScope(
+        notifier: cart ?? CartProvider(),
+        child: const MaterialApp(home: AppShellScreen()),
+      ),
+    ),
+  );
+}
 
 final Finder _dialogBayar = find.descendant(
   of: find.byType(Dialog),

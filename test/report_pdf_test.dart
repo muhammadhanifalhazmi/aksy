@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,11 +9,14 @@ import 'package:aksy/core/data/store_settings.dart';
 import 'package:aksy/features/pos/models/cart_item.dart';
 import 'package:aksy/features/pos/models/order.dart';
 import 'package:aksy/features/pos/models/product.dart';
+import 'package:aksy/features/pos/services/receipt_layout.dart';
 import 'package:aksy/features/pos/services/receipt_pdf_generator.dart';
 import 'package:aksy/features/reports/models/report_period.dart';
 import 'package:aksy/features/reports/services/report_pdf_generator.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('ReportPeriod', () {
     test('computes start and end for each type', () {
       final anchor = DateTime(2026, 5, 15);
@@ -169,6 +173,35 @@ void main() {
       );
       final report = await generateReportPdf(store: store, period: period);
       expect(report, isNotEmpty);
+    });
+    test('embeds the Aksy logo watermark and the brand text', () async {
+      final store = AppStore(products: [drink])
+        ..updateStoreSettings(const StoreSettings(name: 'Toko Berkah'));
+      final order = Order(
+        id: 'o4',
+        createdAt: DateTime.now(),
+        items: [CartItem(product: drink, quantity: 1)],
+        paidAmount: 5000,
+      );
+
+      for (final wide in [true, false]) {
+        final bytes = await generateReceiptPdf(
+          order: order,
+          store: store,
+          wide: wide,
+        );
+        final raw = latin1.decode(bytes, allowInvalid: true);
+        expect(
+          RegExp(r'/Subtype\s*/Image').allMatches(raw).length,
+          greaterThanOrEqualTo(2),
+          reason: 'struk PDF harus memuat logo watermark dan logo footer',
+        );
+      }
+
+      final lines = buildReceiptLines(order: order, store: store, cols: 32);
+      final text = lines.map((l) => l.text).join('\n');
+      expect(text, contains(receiptBrandName));
+      expect(text, contains(receiptBrandTagline));
     });
   });
 }

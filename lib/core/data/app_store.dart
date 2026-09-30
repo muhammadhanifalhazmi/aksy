@@ -228,16 +228,39 @@ class AppStore extends ChangeNotifier {
     _orders.add(order);
     _cashEntries.add(
       CashEntry(
-        id: 'CF${DateTime.now().millisecondsSinceEpoch}',
+        id: nextId('CF'),
         type: CashFlowType.cashIn,
         amount: order.total,
         category: 'Penjualan',
         note: 'Transaksi ${order.id}',
         createdAt: order.createdAt,
+        source: CashEntrySource.sale,
       ),
     );
     _save();
     notifyListeners();
+  }
+
+  /// Id unik untuk data yang dibuat di aplikasi, supaya dua catatan di
+  /// milidetik yang sama tidak saling menimpa.
+  String nextId(String prefix) {
+    var stamp = DateTime.now().millisecondsSinceEpoch;
+    var candidate = '$prefix$stamp';
+    var suffix = 1;
+    while (_idTaken(candidate)) {
+      candidate = '$prefix${stamp}_$suffix';
+      suffix++;
+    }
+    return candidate;
+  }
+
+  bool _idTaken(String id) {
+    return _orders.any((o) => o.id == id) ||
+        _products.any((p) => p.id == id) ||
+        _debts.any((d) => d.id == id) ||
+        _cashEntries.any((e) => e.id == id) ||
+        _shifts.any((s) => s.id == id) ||
+        _activeShift?.id == id;
   }
 
   bool isSameDay(DateTime a, DateTime b) {
@@ -450,6 +473,54 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Mengubah catatan utang. Nominal tidak boleh turun di bawah yang sudah
+  /// dibayar, jika tidak sisa tagihan jadi tidak konsisten.
+  bool updateDebt(Debt debt) {
+    final index = _debts.indexWhere((d) => d.id == debt.id);
+    if (index < 0) return false;
+    final current = _debts[index];
+    if (debt.paidAmount > debt.amount) return false;
+    _debts[index] = debt.copyWith(
+      paidAmount: current.paidAmount,
+      payments: current.payments,
+    );
+    _save();
+    notifyListeners();
+    return true;
+  }
+
+  /// Menghapus catatan utang beserta catatan kas dari pembayarannya supaya
+  /// pembukuan kas tetap seimbang.
+  bool removeDebt(String debtId) {
+    final index = _debts.indexWhere((d) => d.id == debtId);
+    if (index < 0) return false;
+    _debts.removeAt(index);
+    _cashEntries.removeWhere((e) => e.debtId == debtId);
+    _save();
+    notifyListeners();
+    return true;
+  }
+
+  bool updateCashEntry(CashEntry entry) {
+    final index = _cashEntries.indexWhere((e) => e.id == entry.id);
+    if (index < 0) return false;
+    if (!_cashEntries[index].isEditable) return false;
+    _cashEntries[index] = entry;
+    _save();
+    notifyListeners();
+    return true;
+  }
+
+  bool removeCashEntry(String entryId) {
+    final index = _cashEntries.indexWhere((e) => e.id == entryId);
+    if (index < 0) return false;
+    if (!_cashEntries[index].isEditable) return false;
+    _cashEntries.removeAt(index);
+    _save();
+    notifyListeners();
+    return true;
+  }
+
   void recordDebtPayment(String debtId, int amount) {
     final index = _debts.indexWhere((d) => d.id == debtId);
     if (index < 0 || amount <= 0) return;
@@ -457,7 +528,7 @@ class AppStore extends ChangeNotifier {
     if (debt.isPaid || amount > debt.remaining) return;
     final at = DateTime.now();
     final payment = DebtPayment(
-      id: 'PAY${at.millisecondsSinceEpoch}',
+      id: nextId('PAY'),
       amount: amount,
       at: at,
     );
@@ -467,7 +538,7 @@ class AppStore extends ChangeNotifier {
     );
     _cashEntries.add(
       CashEntry(
-        id: 'CF${at.millisecondsSinceEpoch}',
+        id: nextId('CF'),
         type: debt.type == DebtType.receivable
             ? CashFlowType.cashIn
             : CashFlowType.cashOut,
@@ -477,6 +548,8 @@ class AppStore extends ChangeNotifier {
             : 'Pembayaran Hutang',
         note: debt.partyName,
         createdAt: at,
+        source: CashEntrySource.debtPayment,
+        debtId: debt.id,
       ),
     );
     _save();
@@ -487,7 +560,7 @@ class AppStore extends ChangeNotifier {
     final active = _activeShift;
     if (active != null) return active;
     final shift = ShiftRecord(
-      id: 'SFT${DateTime.now().millisecondsSinceEpoch}',
+      id: nextId('SFT'),
       openTime: DateTime.now(),
       startingCash: startingCash,
     );

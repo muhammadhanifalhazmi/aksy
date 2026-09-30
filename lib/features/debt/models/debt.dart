@@ -106,7 +106,30 @@ class Debt {
     return due.isBefore(today);
   }
 
-  Debt copyWith({int? paidAmount, List<DebtPayment>? payments}) {
+  Debt copyWith({
+    DebtType? type,
+    String? partyName,
+    int? amount,
+    DateTime? createdAt,
+    DateTime? dueDate,
+    String? note,
+    int? paidAmount,
+    List<DebtPayment>? payments,
+  }) {
+    return Debt(
+      id: id,
+      type: type ?? this.type,
+      partyName: partyName ?? this.partyName,
+      amount: amount ?? this.amount,
+      createdAt: createdAt ?? this.createdAt,
+      dueDate: dueDate ?? this.dueDate,
+      note: note ?? this.note,
+      paidAmount: paidAmount ?? this.paidAmount,
+      payments: payments ?? this.payments,
+    );
+  }
+
+  Debt clearedPayments() {
     return Debt(
       id: id,
       type: type,
@@ -115,8 +138,8 @@ class Debt {
       createdAt: createdAt,
       dueDate: dueDate,
       note: note,
-      paidAmount: paidAmount ?? this.paidAmount,
-      payments: payments ?? this.payments,
+      paidAmount: 0,
+      payments: const [],
     );
   }
 }

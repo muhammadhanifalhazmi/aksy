@@ -101,6 +101,8 @@ class _DebtScreenState extends State<DebtScreen> {
                       return _DebtCard(
                         debt: debt,
                         onTap: () => _showDetail(context, store, debt),
+                        onEdit: () => _showForm(context, store, debt: debt),
+                        onDelete: () => _confirmDelete(context, store, debt),
                       );
                     },
                   ),
@@ -110,12 +112,51 @@ class _DebtScreenState extends State<DebtScreen> {
     );
   }
 
-  Future<void> _showForm(BuildContext context, AppStore store) {
+  Future<void> _showForm(
+    BuildContext context,
+    AppStore store, {
+    Debt? debt,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _DebtFormSheet(store: store),
+      builder: (_) => _DebtFormSheet(store: store, existing: debt),
+    );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    AppStore store,
+    Debt debt,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus catatan?'),
+        content: Text(
+          'Catatan ${debt.type.label} atas nama ${debt.partyName} '
+          'sebesar ${CurrencyFormatter.formatIDR(debt.amount)} akan dihapus'
+          '${debt.payments.isEmpty ? '' : ' beserta ${debt.payments.length} riwayat pembayaran dan catatan kasnya'}.'
+          ' Tindakan ini tidak bisa dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    store.removeDebt(debt.id);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Catatan ${debt.partyName} dihapus')),
     );
   }
 
@@ -130,10 +171,17 @@ class _DebtScreenState extends State<DebtScreen> {
 }
 
 class _DebtCard extends StatelessWidget {
-  const _DebtCard({required this.debt, required this.onTap});
+  const _DebtCard({
+    required this.debt,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final Debt debt;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +220,31 @@ class _DebtCard extends StatelessWidget {
                       label: 'Belum lunas',
                       color: AppTheme.warningOrange,
                     ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Ubah catatan',
+                    onSelected: (value) {
+                      if (value == 'edit') onEdit();
+                      if (value == 'delete') onDelete();
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: ListTile(
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Ubah'),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: ListTile(
+                          leading: Icon(Icons.delete_outline),
+                          title: Text('Hapus'),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -209,9 +282,10 @@ class _DebtCard extends StatelessWidget {
 }
 
 class _DebtFormSheet extends StatefulWidget {
-  const _DebtFormSheet({required this.store});
+  const _DebtFormSheet({required this.store, this.existing});
 
   final AppStore store;
+  final Debt? existing;
 
   @override
   State<_DebtFormSheet> createState() => _DebtFormSheetState();
@@ -225,6 +299,20 @@ class _DebtFormSheetState extends State<_DebtFormSheet> {
   DateTime? _dueDate;
   String? _nameError;
   String? _amountError;
+
+  bool get _isEditing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    if (existing == null) return;
+    _type = existing.type;
+    _dueDate = existing.dueDate;
+    _nameController.text = existing.partyName;
+    _amountController.text = existing.amount.toString();
+    _noteController.text = existing.note ?? '';
+  }
 
   @override
   void dispose() {
@@ -247,10 +335,16 @@ class _DebtFormSheetState extends State<_DebtFormSheet> {
   void _save() {
     final name = _nameController.text.trim();
     final amount = int.tryParse(_amountController.text.trim());
+    final existing = widget.existing;
     final nameError = name.isEmpty ? 'Nama wajib diisi' : null;
-    final amountError = (amount == null || amount <= 0)
+    var amountError = (amount == null || amount <= 0)
         ? 'Nominal harus lebih dari 0'
         : null;
+    if (amountError == null && existing != null && amount! < existing.paidAmount) {
+      amountError =
+          'Nominal tidak boleh di bawah yang sudah dibayar '
+          '(${CurrencyFormatter.formatIDR(existing.paidAmount)})';
+    }
     if (nameError != null || amountError != null) {
       setState(() {
         _nameError = nameError;
@@ -258,22 +352,46 @@ class _DebtFormSheetState extends State<_DebtFormSheet> {
       });
       return;
     }
-    widget.store.addDebt(
-      Debt(
-        id: 'D${DateTime.now().millisecondsSinceEpoch}',
+    final note = _noteController.text.trim();
+    if (existing == null) {
+      widget.store.addDebt(
+        Debt(
+          id: widget.store.nextId('D'),
+          type: _type,
+          partyName: name,
+          amount: amount!,
+          createdAt: DateTime.now(),
+          dueDate: _dueDate,
+          note: note.isEmpty ? null : note,
+        ),
+      );
+    } else {
+      final updated = Debt(
+        id: existing.id,
         type: _type,
         partyName: name,
         amount: amount!,
-        createdAt: DateTime.now(),
+        createdAt: existing.createdAt,
         dueDate: _dueDate,
-        note: _noteController.text.trim().isEmpty
-            ? null
-            : _noteController.text.trim(),
-      ),
-    );
+        note: note.isEmpty ? null : note,
+        paidAmount: existing.paidAmount,
+        payments: existing.payments,
+      );
+      if (!widget.store.updateDebt(updated)) {
+        setState(() {
+          _amountError = 'Gagal menyimpan, coba ulangi';
+        });
+        return;
+      }
+    }
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${_type.label} tercatat')),
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          _isEditing ? 'Catatan ${_type.label} diperbarui' : '${_type.label} tercatat',
+        ),
+      ),
     );
   }
 
@@ -293,7 +411,7 @@ class _DebtFormSheetState extends State<_DebtFormSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Catat ${_type.label} Baru',
+                _isEditing ? 'Ubah Catatan' : 'Catat ${_type.label} Baru',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
