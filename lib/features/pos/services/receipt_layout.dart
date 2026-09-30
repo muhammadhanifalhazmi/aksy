@@ -64,10 +64,19 @@ List<ReceiptLine> buildReceiptLines({
   row('Tunai', CurrencyFormatter.formatIDR(order.paidAmount));
   row('Kembalian', CurrencyFormatter.formatIDR(order.change));
   divider();
-  center('Terima kasih, datang kembali!');
-  center(settings.footer);
+  for (final text in receiptFooterLines(settings.footer)) {
+    center(text);
+  }
 
   return lines;
+}
+
+List<String> receiptFooterLines(String footer) {
+  const thanks = 'Terima kasih, datang kembali!';
+  final custom = footer.trim();
+  if (custom.isEmpty) return const [thanks];
+  if (custom.toLowerCase().contains('terima kasih')) return [custom];
+  return [thanks, custom];
 }
 
 String fitToWidth(String text, int cols) {

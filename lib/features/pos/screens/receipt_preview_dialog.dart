@@ -10,6 +10,7 @@ import '../../printer/services/print_receipt_action.dart';
 import '../../printer/services/thermal_printer_service.dart';
 import '../models/cart_item.dart';
 import '../models/order.dart';
+import '../services/receipt_layout.dart';
 import '../services/receipt_pdf_generator.dart';
 
 Future<void> showReceiptPreview(
@@ -71,7 +72,9 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
     lines.add(const _Divider());
     lines.addAll(_paymentLines());
     lines.add(const _Divider());
-    lines.add(const _CenterLine('Terima kasih, datang kembali!'));
+    for (final text in receiptFooterLines(widget.store.settings.footer)) {
+      lines.add(_CenterLine(text));
+    }
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -196,7 +199,6 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
       _CenterLine(settings.name),
       if (settings.address.isNotEmpty) _CenterLine(settings.address),
       if (settings.phone.isNotEmpty) _CenterLine(settings.phone),
-      if (settings.footer.isNotEmpty) _CenterLine(settings.footer),
       const SizedBox(height: 6),
       _Row(
         left: 'No. ${widget.order.id}',
