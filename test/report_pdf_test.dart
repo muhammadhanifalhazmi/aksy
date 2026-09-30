@@ -201,7 +201,7 @@ void main() {
       final lines = buildReceiptLines(order: order, store: store, cols: 32);
       final text = lines.map((l) => l.text).join('\n');
       expect(text, contains(receiptBrandName));
-      expect(text, contains(receiptBrandTagline));
+      expect(text, isNot(contains('Kasir untuk UMKM')));
     });
   });
 }

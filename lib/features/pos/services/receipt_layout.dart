@@ -21,6 +21,7 @@ List<ReceiptLine> buildReceiptLines({
   required Order order,
   required AppStore store,
   required int cols,
+  bool includeBrandText = true,
 }) {
   final settings = store.settings;
   final shift = store.activeShift;
@@ -75,16 +76,20 @@ List<ReceiptLine> buildReceiptLines({
   for (final text in receiptFooterLines(settings.footer)) {
     center(text);
   }
-  lines.addAll(receiptBrandLines(cols));
+  if (includeBrandText) {
+    lines.addAll(receiptBrandLines(cols));
+  }
 
   return lines;
 }
 
-/// Baris penanda Aplikasi Kasir Easy. Printer thermal hanya bisa mencetak teks,
-/// jadi logo hanya muncul di struk PDF dan pratinjau layar.
+/// Penanda Aplikasi Kasir Easy di bagian paling bawah struk.
+///
+/// Struk PDF dan pratinjau layar memakai baris teks biasa, sedangkan struk
+/// thermal mencetak logo dan nama aplikasi sebagai satu gambar raster 1-bit
+/// supaya bisa tampil berdampingan (lihat `buildBrandFooterBitmap`).
 const receiptBrandName = 'Aplikasi Kasir Easy';
-const receiptBrandTagline = 'Kasir untuk UMKM';
-const receiptBrandAsset = 'assets/images/adaptive_icon_fg.png';
+const receiptBrandAsset = 'assets/images/brand_logo.png';
 
 List<ReceiptLine> receiptBrandLines(int cols) {
   return [
@@ -94,7 +99,6 @@ List<ReceiptLine> receiptBrandLines(int cols) {
       align: ReceiptAlign.center,
       bold: true,
     ),
-    ReceiptLine(fitToWidth(receiptBrandTagline, cols), align: ReceiptAlign.center),
   ];
 }
 

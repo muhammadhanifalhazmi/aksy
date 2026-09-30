@@ -5,6 +5,7 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/print_text_sanitizer.dart';
 import '../../pos/models/order.dart';
 import '../../pos/services/receipt_layout.dart';
+import 'esc_pos_image.dart';
 
 class EscPosBuilder {
   EscPosBuilder({required this.columns});
@@ -21,6 +22,9 @@ class EscPosBuilder {
   static const _cut = [0x1D, 0x56, 0x00];
 
   void _raw(List<int> bytes) => _buffer.add(bytes);
+
+  /// Menulis bytes mentah, dipakai untuk menyisipkan gambar raster logo.
+  void rawBytes(List<int> bytes) => _buffer.add(bytes);
 
   void initialize() {
     _raw(_init);
@@ -65,9 +69,15 @@ Uint8List buildReceiptEscPos({
   required AppStore store,
   required bool wide,
   bool cut = true,
+  MonochromeBitmap? brand,
 }) {
   final cols = receiptColumns(wide: wide);
-  final lines = buildReceiptLines(order: order, store: store, cols: cols);
+  final lines = buildReceiptLines(
+    order: order,
+    store: store,
+    cols: cols,
+    includeBrandText: false,
+  );
   final builder = EscPosBuilder(columns: cols)..initialize();
 
   for (final line in lines) {
@@ -75,6 +85,11 @@ Uint8List buildReceiptEscPos({
       ..align(line.align)
       ..bold(on: line.bold)
       ..line(line.text);
+  }
+
+  final brandBytes = buildReceiptLogoEscPos(brand);
+  if (brandBytes.isNotEmpty) {
+    builder.rawBytes(brandBytes);
   }
 
   builder
@@ -88,21 +103,29 @@ Uint8List buildReceiptEscPos({
   return builder.build();
 }
 
-Uint8List buildTestEscPos({bool wide = false, bool cut = true}) {
+Uint8List buildTestEscPos({
+  bool wide = false,
+  bool cut = true,
+  MonochromeBitmap? brand,
+}) {
   final cols = receiptColumns(wide: wide);
   final builder = EscPosBuilder(columns: cols)..initialize()
     ..align(ReceiptAlign.center)
     ..bold(on: true)
     ..line('TES CETAK')
     ..bold(on: false)
-    ..line('Aplikasi Kasir Easy')
     ..feed(1)
     ..line(DateFormatter.when(DateTime.now()))
     ..feed(1)
     ..line('-' * cols)
     ..line('Printer termal siap digunakan')
     ..line('Lebar: ${wide ? '80' : '58'}mm - $cols karakter')
-    ..feed(3);
+    ..feed(2);
+  final footer = buildReceiptLogoEscPos(brand);
+  if (footer.isNotEmpty) {
+    builder.rawBytes(footer);
+  }
+  builder.feed(2);
   if (cut) {
     builder.cut();
   }

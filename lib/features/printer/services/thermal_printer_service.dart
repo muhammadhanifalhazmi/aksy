@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../../../core/data/app_store.dart';
 import '../../pos/models/order.dart';
+import '../../pos/services/receipt_layout.dart';
 import '../models/bluetooth_printer_device.dart';
 import '../models/printer_settings.dart';
+import 'esc_pos_image.dart';
 import 'esc_pos_receipt.dart';
 
 class ThermalPrinterService {
@@ -16,6 +18,24 @@ class ThermalPrinterService {
   final MethodChannel _channel;
 
   String? _connectedAddress;
+
+  /// Footer brand (logo + nama aplikasi) sudah dirender menjadi gambar 1-bit
+  /// saat pertama kali dicetak, lalu dipakai ulang agar tidak merender ulang.
+  final Map<bool, MonochromeBitmap?> _brandCache = {};
+
+  Future<MonochromeBitmap?> _brand({required bool wide}) async {
+    if (_brandCache.containsKey(wide)) return _brandCache[wide];
+    final bitmap = await buildBrandFooterBitmap(
+      asset: receiptBrandAsset,
+      text: receiptBrandName,
+      maxWidth: wide ? 380 : 280,
+      logoDots: wide ? 60 : 48,
+      textDots: wide ? 19 : 15,
+      gapDots: wide ? 8 : 6,
+    );
+    _brandCache[wide] = bitmap;
+    return bitmap;
+  }
 
   bool get isSupported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -130,7 +150,8 @@ class ThermalPrinterService {
     required PrinterSettings settings,
     required AppStore store,
     required Order order,
-  }) {
+  }) async {
+    final brand = await _brand(wide: settings.wide);
     return _print(
       settings,
       buildReceiptEscPos(
@@ -138,14 +159,20 @@ class ThermalPrinterService {
         store: store,
         wide: settings.wide,
         cut: settings.cut,
+        brand: brand,
       ),
     );
   }
 
-  Future<void> printTest(PrinterSettings settings) {
+  Future<void> printTest(PrinterSettings settings) async {
+    final brand = await _brand(wide: settings.wide);
     return _print(
       settings,
-      buildTestEscPos(wide: settings.wide, cut: settings.cut),
+      buildTestEscPos(
+        wide: settings.wide,
+        cut: settings.cut,
+        brand: brand,
+      ),
     );
   }
 

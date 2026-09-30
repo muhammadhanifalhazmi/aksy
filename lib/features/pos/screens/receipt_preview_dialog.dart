@@ -417,8 +417,8 @@ class _BrandBlock extends StatelessWidget {
       children: [
         Image.asset(
           receiptBrandAsset,
-          width: 46,
-          height: 46,
+          width: 64,
+          height: 64,
           fit: BoxFit.contain,
           errorBuilder: (_, _, _) => const SizedBox.shrink(),
         ),
@@ -428,13 +428,6 @@ class _BrandBlock extends StatelessWidget {
           style: theme.textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w800,
             color: theme.colorScheme.primary,
-          ),
-        ),
-        Text(
-          receiptBrandTagline,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.outline,
           ),
         ),
       ],
@@ -452,11 +445,11 @@ class _BrandWatermark extends StatelessWidget {
         child: Transform.rotate(
           angle: -0.5,
           child: Opacity(
-            opacity: 0.07,
+            opacity: 0.09,
             child: Image.asset(
               receiptBrandAsset,
-              width: 190,
-              height: 190,
+              width: 210,
+              height: 210,
               fit: BoxFit.contain,
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),
