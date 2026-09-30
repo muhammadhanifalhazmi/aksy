@@ -58,15 +58,16 @@ class ShiftScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _closeShift(BuildContext context, AppStore store) {
+  Future<void> _closeShift(BuildContext context, AppStore store) async {
     final theme = Theme.of(context);
     final active = store.activeShift;
-    if (active == null) return Future.value();
+    if (active == null) return;
     final controller = TextEditingController();
     final noteController = TextEditingController();
-    var actual = active.startingCash;
+    var actual = store.expectedCashForShift(active);
+    var cashError = false;
 
-    return showDialog<void>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -89,14 +90,16 @@ class ShiftScreen extends StatelessWidget {
                   autofocus: true,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Kas akhir (Rp)',
                     prefixText: 'Rp ',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: cashError ? 'Masukkan jumlah kas akhir' : null,
                   ),
-                  onChanged: (value) => setDialogState(
-                    () => actual = int.tryParse(value) ?? 0,
-                  ),
+                  onChanged: (value) => setDialogState(() {
+                    actual = int.tryParse(value) ?? 0;
+                    cashError = false;
+                  }),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -149,11 +152,18 @@ class ShiftScreen extends StatelessWidget {
                 child: const Text('Batal'),
               ),
               FilledButton(
-                onPressed: () async {
-                  final closed = store.closeShift(actual, note: noteController.text.trim());
+                onPressed: () {
+                  if (controller.text.trim().isEmpty) {
+                    setDialogState(() => cashError = true);
+                    return;
+                  }
+                  final closed = store.closeShift(
+                    actual,
+                    note: noteController.text.trim(),
+                  );
                   Navigator.of(dialogContext).pop();
-                  if (closed != null && dialogContext.mounted) {
-                    _showClosingSummary(dialogContext, closed);
+                  if (closed != null && context.mounted) {
+                    _showClosingSummary(context, closed);
                   }
                 },
                 child: const Text('Tutup Shift'),
@@ -163,13 +173,15 @@ class ShiftScreen extends StatelessWidget {
         },
       ),
     );
+    controller.dispose();
+    noteController.dispose();
   }
 
   void _showClosingSummary(BuildContext context, ShiftRecord shift) {
     final theme = Theme.of(context);
     final difference = shift.difference ?? 0;
     final summary = difference == 0
-        ? 'Kondang'
+        ? 'Seimbang'
         : difference > 0
             ? 'Surplus'
             : 'Defisit';
@@ -200,7 +212,7 @@ class ShiftScreen extends StatelessWidget {
               value: CurrencyFormatter.formatIDR(shift.startingCash),
             ),
             _SummaryRow(
-              label: 'Penjualan selama shift',
+              label: 'Perubahan kas (jual +/- kas masuk & keluar)',
               value: CurrencyFormatter.formatIDR(
                 shift.expectedCash! - shift.startingCash,
               ),
@@ -411,7 +423,9 @@ class _ActiveShiftCard extends StatelessWidget {
             ),
             _ShiftStat(
               label: 'Kas diperkirakan',
-              value: CurrencyFormatter.formatIDR(shift.startingCash + salesTotal),
+              value: CurrencyFormatter.formatIDR(
+                store.expectedCashForShift(shift),
+              ),
               bold: true,
             ),
             const SizedBox(height: 16),
@@ -470,7 +484,7 @@ class _ShiftHistoryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final difference = shift.difference ?? 0;
     final status = difference == 0
-        ? 'Kondang'
+        ? 'Seimbang'
         : difference > 0
             ? 'Surplus'
             : 'Defisit';

@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:aksy/app_shell_screen.dart';
 import 'package:aksy/core/data/app_store.dart';
 import 'package:aksy/core/data/store_settings.dart';
 import 'package:aksy/core/utils/currency_formatter.dart';
 import 'package:aksy/core/widgets/app_navigation_drawer.dart';
+import 'package:aksy/features/cash_flow/models/cash_entry.dart';
 import 'package:aksy/features/debt/models/debt.dart';
 import 'package:aksy/features/pos/models/product.dart';
 import 'package:aksy/features/pos/providers/cart_provider.dart';
@@ -175,6 +178,162 @@ void main() {
     });
   });
 
+  group('Payment dialog', () {
+    testWidgets('paying with a discount closes cleanly and saves the order', (
+      tester,
+    ) async {
+      final product = _product(
+        id: 'p1',
+        name: 'Kopi Susu',
+        price: 18000,
+        category: 'Minuman',
+      );
+      final store = AppStore(products: [product]);
+      final cart = CartProvider()..addItem(product);
+
+      await tester.pumpWidget(
+        AppScope(
+          store: store,
+          child: CartScope(
+            notifier: cart,
+            child: const MaterialApp(home: AppShellScreen()),
+          ),
+        ),
+      );
+
+      await _openPaymentDialog(tester);
+
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Diskon (Rp)'),
+        '3000',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ActionChip, 'Uang Pas'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(_dialogBayar);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(store.orders, hasLength(1));
+      expect(store.orders.single.discount, 3000);
+      expect(store.orders.single.total, 15000);
+      expect(cart.isEmpty, isTrue);
+    });
+
+    testWidgets('tapping Bayar twice records a single order', (tester) async {
+      final product = _product(
+        id: 'p1',
+        name: 'Kopi Susu',
+        price: 18000,
+        category: 'Minuman',
+      );
+      final store = AppStore(products: [product]);
+      final cart = CartProvider()..addItem(product);
+
+      await tester.pumpWidget(
+        AppScope(
+          store: store,
+          child: CartScope(
+            notifier: cart,
+            child: const MaterialApp(home: AppShellScreen()),
+          ),
+        ),
+      );
+
+      await _openPaymentDialog(tester);
+
+      await tester.tap(_dialogBayar);
+      await tester.tap(_dialogBayar, warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(store.orders, hasLength(1));
+    });
+
+    testWidgets('a discount above the subtotal is capped, never negative', (
+      tester,
+    ) async {
+      final product = _product(
+        id: 'p1',
+        name: 'Kopi Susu',
+        price: 18000,
+        category: 'Minuman',
+      );
+      final store = AppStore(products: [product]);
+      final cart = CartProvider()..addItem(product);
+
+      await tester.pumpWidget(
+        AppScope(
+          store: store,
+          child: CartScope(
+            notifier: cart,
+            child: const MaterialApp(home: AppShellScreen()),
+          ),
+        ),
+      );
+
+      await _openPaymentDialog(tester);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Diskon (Rp)'),
+        '999999',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Total tagihan Rp -'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.textContaining('Kurang'),
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(_dialogBayar);
+      await tester.pumpAndSettle();
+
+      expect(store.orders.single.discount, 18000);
+      expect(store.orders.single.total, 0);
+      expect(store.orders.single.change, 18000);
+      expect(store.orders.single.paidAmount, 18000);
+    });
+
+    testWidgets('paying is blocked when a cart product was deleted', (
+      tester,
+    ) async {
+      final product = _product(
+        id: 'p1',
+        name: 'Kopi Susu',
+        price: 18000,
+        category: 'Minuman',
+      );
+      final store = AppStore(products: [product]);
+      final cart = CartProvider()..addItem(product);
+
+      await tester.pumpWidget(
+        AppScope(
+          store: store,
+          child: CartScope(
+            notifier: cart,
+            child: const MaterialApp(home: AppShellScreen()),
+          ),
+        ),
+      );
+
+      await _openPaymentDialog(tester);
+      store.removeProduct('p1');
+      await tester.tap(_dialogBayar);
+      await tester.pumpAndSettle();
+
+      expect(store.orders, isEmpty);
+      expect(cart.isEmpty, isFalse);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('POS cart sheet', () {
     testWidgets('quantity stepper updates the cart shown in the sheet', (
       tester,
@@ -325,7 +484,24 @@ void main() {
       );
       final store = AppStore(products: [product]);
       expect(store.productByBarcode('8991001234567'), same(product));
+      expect(store.productByBarcode(' 8991001234567 '), same(product));
       expect(store.productByBarcode('000'), isNull);
+      expect(store.productByBarcode(''), isNull);
+    });
+
+    test('productByBarcode ignores letter case', () {
+      final product = const Product(
+        id: 'p2',
+        name: 'Kopi Bubuk',
+        price: 45000,
+        category: 'Minuman',
+        icon: Icons.coffee,
+        stock: 20,
+        barcode: 'SKU-ABC12',
+      );
+      final store = AppStore(products: [product]);
+      expect(store.productByBarcode('sku-abc12'), same(product));
+      expect(store.productByBarcode('SKU-ABC12'), same(product));
     });
 
     test(
@@ -574,6 +750,170 @@ void main() {
       expect(store.products.single.name, 'Baru');
       expect(store.products, hasLength(1));
     });
+
+    test('importBackup refuses files that are not an aksy backup', () {
+      final store = AppStore();
+      store.addProduct(
+        _product(id: 'p1', name: 'Lama', price: 1000, category: 'Minuman'),
+      );
+      store.updateStoreSettings(const StoreSettings(name: 'Toko Asli'));
+
+      expect(store.importBackup('{}'), isFalse);
+      expect(store.importBackup('{"foo": 1}'), isFalse);
+      expect(store.importBackup('{"products": []}'), isFalse);
+      expect(
+        store.importBackup('{"version": 99, "products": []}'),
+        isFalse,
+      );
+
+      expect(store.products, hasLength(1));
+      expect(store.settings.name, 'Toko Asli');
+    });
+  });
+
+  group('AppStore recovery', () {
+    test('corrupt persisted data does not brick the app', () async {
+      SharedPreferences.setMockInitialValues({
+        'store.products': '[{"id":"p1","nama":"x"}]',
+        'store.orders': 'bukan json',
+        'store.cash_entries': '[1, 2, 3]',
+        'store.debts': '{"bukan":"list"}',
+        'store.shifts': '[]',
+        'store.active_shift': '{rusak',
+        'store.settings': 'bukan json',
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      final store = AppStore.fromPrefs(prefs);
+
+      expect(store.orders, isEmpty);
+      expect(store.cashEntries, isEmpty);
+      expect(store.debts, isEmpty);
+      expect(store.activeShift, isNull);
+      expect(store.products, isEmpty);
+      expect(store.settings.name, isNotEmpty);
+    });
+
+    test('a single malformed record does not drop the whole collection', () async {
+      SharedPreferences.setMockInitialValues({
+        'store.products': jsonEncode([
+          _product(id: 'p1', name: 'Good', price: 1000, category: 'Minuman').toJson(),
+          {'id': 'p2'},
+        ]),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      final store = AppStore.fromPrefs(prefs);
+
+      expect(store.products.map((p) => p.id), ['p1']);
+    });
+  });
+
+  group('Shift cash reconciliation', () {
+    test('expected cash accounts for cash in and cash out', () {
+      final store = AppStore();
+      final product = _product(
+        id: 'p1',
+        name: 'Es Teh',
+        price: 5000,
+        category: 'Minuman',
+        stock: 10,
+      );
+      store.addProduct(product);
+      final shift = store.openShift(100000);
+
+      final cart = CartProvider()..addItem(product);
+      cart.submitOrder(10000, store);
+      store.addCashEntry(
+        CashEntry(
+          id: 'cf1',
+          type: CashFlowType.cashOut,
+          amount: 20000,
+          category: 'Belanja Stok',
+          createdAt: DateTime.now(),
+        ),
+      );
+
+      expect(store.expectedCashForShift(shift), 100000 + 5000 - 20000);
+
+      final closed = store.closeShift(85000);
+      expect(closed?.expectedCash, 85000);
+      expect(closed?.difference, 0);
+    });
+  });
+
+  group('Date-based status flags', () {
+    test('a debt is only overdue after its due date passes', () {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      Debt build(DateTime due) => Debt(
+        id: 'd1',
+        type: DebtType.receivable,
+        partyName: 'Budi',
+        amount: 10000,
+        createdAt: now.subtract(const Duration(days: 5)),
+        dueDate: due,
+      );
+
+      expect(build(today).isOverdue, isFalse);
+      expect(
+        build(today.add(const Duration(days: 1))).isOverdue,
+        isFalse,
+      );
+      expect(
+        build(today.subtract(const Duration(days: 1))).isOverdue,
+        isTrue,
+      );
+      expect(build(now.subtract(const Duration(days: 1))).isOverdue, isTrue);
+    });
+
+    test('an already expired product counts as expiring soon', () {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      Product build(DateTime? expiry) => Product(
+        id: 'p1',
+        name: 'Susu',
+        price: 5000,
+        category: 'Minuman',
+        icon: Icons.local_drink,
+        stock: 5,
+        costPrice: 3000,
+        expiryDate: expiry,
+      );
+
+      expect(build(null).isExpiringSoon(), isFalse);
+      expect(build(today.add(const Duration(days: 30))).isExpiringSoon(), isFalse);
+      expect(build(today.add(const Duration(days: 14))).isExpiringSoon(), isTrue);
+      expect(build(today).isExpiringSoon(), isTrue);
+      expect(
+        build(today.subtract(const Duration(days: 3))).isExpiringSoon(),
+        isTrue,
+      );
+    });
+  });
+
+  group('Reports', () {
+    test('top products keep sold items whose product was deleted', () {
+      final store = AppStore();
+      final product = _product(
+        id: 'p1',
+        name: 'Kopi Susu',
+        price: 18000,
+        category: 'Minuman',
+        stock: 20,
+      );
+      store.addProduct(product);
+      final cart = CartProvider()..addItem(product);
+      cart.submitOrder(50000, store);
+      store.removeProduct('p1');
+
+      final top = store.topProductsOn(DateTime.now());
+      expect(top, hasLength(1));
+      expect(top.single.key.name, 'Kopi Susu');
+      expect(top.single.value, 1);
+    });
   });
 }
 
@@ -593,4 +933,17 @@ Product _product({
     stock: stock,
     costPrice: price ~/ 2,
   );
+}
+
+final Finder _cartPayButton = find.text('Bayar').first;
+
+final Finder _dialogBayar = find.descendant(
+  of: find.byType(Dialog),
+  matching: find.text('Bayar'),
+);
+
+Future<void> _openPaymentDialog(WidgetTester tester) async {
+  await tester.tap(_cartPayButton);
+  await tester.pumpAndSettle();
+  expect(find.text('Pembayaran'), findsOneWidget);
 }

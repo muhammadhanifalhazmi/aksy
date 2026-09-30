@@ -187,6 +187,7 @@ class _CashFormSheetState extends State<_CashFormSheet> {
   final _noteController = TextEditingController();
   CashFlowType _type = CashFlowType.cashIn;
   String _category = _inCategories.first;
+  String? _amountError;
 
   List<String> get _categories =>
       _type == CashFlowType.cashIn ? _inCategories : _outCategories;
@@ -200,7 +201,10 @@ class _CashFormSheetState extends State<_CashFormSheet> {
 
   void _save() {
     final amount = int.tryParse(_amountController.text.trim());
-    if (amount == null || amount <= 0) return;
+    if (amount == null || amount <= 0) {
+      setState(() => _amountError = 'Nominal harus lebih dari 0');
+      return;
+    }
     widget.store.addCashEntry(
       CashEntry(
         id: 'CF${DateTime.now().millisecondsSinceEpoch}',
@@ -268,10 +272,16 @@ class _CashFormSheetState extends State<_CashFormSheet> {
                 controller: _amountController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
+                onChanged: (_) {
+                  if (_amountError != null) {
+                    setState(() => _amountError = null);
+                  }
+                },
+                decoration: InputDecoration(
                   labelText: 'Nominal (Rp)',
                   prefixText: 'Rp ',
-                  border: OutlineInputBorder(),
+                  errorText: _amountError,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),

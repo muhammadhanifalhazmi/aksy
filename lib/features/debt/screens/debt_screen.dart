@@ -223,6 +223,8 @@ class _DebtFormSheetState extends State<_DebtFormSheet> {
   final _noteController = TextEditingController();
   DebtType _type = DebtType.receivable;
   DateTime? _dueDate;
+  String? _nameError;
+  String? _amountError;
 
   @override
   void dispose() {
@@ -245,13 +247,23 @@ class _DebtFormSheetState extends State<_DebtFormSheet> {
   void _save() {
     final name = _nameController.text.trim();
     final amount = int.tryParse(_amountController.text.trim());
-    if (name.isEmpty || amount == null || amount <= 0) return;
+    final nameError = name.isEmpty ? 'Nama wajib diisi' : null;
+    final amountError = (amount == null || amount <= 0)
+        ? 'Nominal harus lebih dari 0'
+        : null;
+    if (nameError != null || amountError != null) {
+      setState(() {
+        _nameError = nameError;
+        _amountError = amountError;
+      });
+      return;
+    }
     widget.store.addDebt(
       Debt(
         id: 'D${DateTime.now().millisecondsSinceEpoch}',
         type: _type,
         partyName: name,
-        amount: amount,
+        amount: amount!,
         createdAt: DateTime.now(),
         dueDate: _dueDate,
         note: _noteController.text.trim().isEmpty
@@ -308,10 +320,16 @@ class _DebtFormSheetState extends State<_DebtFormSheet> {
               const SizedBox(height: 12),
               TextField(
                 controller: _nameController,
+                onChanged: (_) {
+                  if (_nameError != null) {
+                    setState(() => _nameError = null);
+                  }
+                },
                 decoration: InputDecoration(
                   labelText: _type == DebtType.receivable
                       ? 'Nama pelanggan'
                       : 'Nama supplier',
+                  errorText: _nameError,
                   border: const OutlineInputBorder(),
                 ),
               ),
@@ -320,10 +338,16 @@ class _DebtFormSheetState extends State<_DebtFormSheet> {
                 controller: _amountController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
+                onChanged: (_) {
+                  if (_amountError != null) {
+                    setState(() => _amountError = null);
+                  }
+                },
+                decoration: InputDecoration(
                   labelText: 'Nominal (Rp)',
                   prefixText: 'Rp ',
-                  border: OutlineInputBorder(),
+                  errorText: _amountError,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),

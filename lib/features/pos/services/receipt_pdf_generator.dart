@@ -4,6 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../../core/data/app_store.dart';
+import '../../../core/utils/print_text_sanitizer.dart';
 import '../models/order.dart';
 import 'receipt_layout.dart';
 
@@ -19,7 +20,11 @@ Future<Uint8List> generateReceiptPdf({
   final cols = wide ? 32 : 23;
 
   final content = buildReceiptLines(order: order, store: store, cols: cols);
-  final height = margin * 2 + (content.length + 1) * lineHeight;
+  final visualLines = content.fold<int>(
+    0,
+    (total, line) => total + '\n'.allMatches(line.text).length + 1,
+  );
+  final height = margin * 2 + (visualLines + 1) * lineHeight;
 
   final doc = pw.Document();
   doc.addPage(
@@ -30,7 +35,7 @@ Future<Uint8List> generateReceiptPdf({
         children: [
           for (final line in content)
             pw.Text(
-              line.text,
+              sanitizePdfText(line.text),
               textAlign: line.align == ReceiptAlign.center
                   ? pw.TextAlign.center
                   : pw.TextAlign.left,

@@ -67,12 +67,13 @@ class CartProvider extends ChangeNotifier {
   int changeFor(int cashReceived) => cashReceived - subtotal;
 
   Order submitOrder(int paidAmount, AppStore store, {int discount = 0}) {
+    final safeDiscount = discount < 0 ? 0 : discount.clamp(0, subtotal).toInt();
     final order = Order(
       id: 'TRX${DateTime.now().millisecondsSinceEpoch}',
       createdAt: DateTime.now(),
       items: List.of(_items),
       paidAmount: paidAmount,
-      discount: discount,
+      discount: safeDiscount,
     );
     store.recordOrder(order);
     _items.clear();

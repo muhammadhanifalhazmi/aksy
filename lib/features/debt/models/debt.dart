@@ -100,7 +100,10 @@ class Debt {
 
   bool get isOverdue {
     if (isPaid || dueDate == null) return false;
-    return dueDate!.isBefore(DateTime.now());
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(dueDate!.year, dueDate!.month, dueDate!.day);
+    return due.isBefore(today);
   }
 
   Debt copyWith({int? paidAmount, List<DebtPayment>? payments}) {

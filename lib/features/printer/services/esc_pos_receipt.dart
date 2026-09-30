@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/utils/print_text_sanitizer.dart';
 import '../../pos/models/order.dart';
 import '../../pos/services/receipt_layout.dart';
 
@@ -52,12 +53,8 @@ class EscPosBuilder {
 
   static List<int> encodeText(String text) {
     final bytes = <int>[];
-    for (final rune in text.runes) {
-      if (rune <= 0xFF) {
-        bytes.add(rune);
-      } else {
-        bytes.add(0x3F);
-      }
+    for (final rune in sanitizeThermalText(text).runes) {
+      bytes.add(rune <= 0xFF ? rune : 0x3F);
     }
     return bytes;
   }

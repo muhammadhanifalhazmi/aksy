@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aksy/core/data/app_store.dart';
+import 'package:aksy/core/data/store_settings.dart';
 import 'package:aksy/features/pos/models/cart_item.dart';
 import 'package:aksy/features/pos/models/order.dart';
 import 'package:aksy/features/pos/models/product.dart';
@@ -124,6 +125,50 @@ void main() {
         wide: true,
       );
       expect(bytes, isNotEmpty);
+    });
+
+    test('non-latin-1 store names and product names do not break the PDF',
+        () async {
+      final fancy = Product(
+        id: 'p9',
+        name: 'Kopi\u2019Susu \u2014 \u4e2d\u6587',
+        price: 5000,
+        category: 'Menu \u2605',
+        icon: Icons.local_drink,
+        stock: 10,
+        costPrice: 2000,
+      );
+      final store = AppStore(products: [fancy])
+        ..updateStoreSettings(
+          const StoreSettings(
+            name: 'Kedai Kopi \u2014 Raglan',
+            address: 'Jl. Jenderal Sudirman \u2026 No. 1',
+            phone: '0812\u2013345',
+            footer: 'Barang yang dibeli tidak dapat ditukar\u2019',
+          ),
+        );
+      final order = Order(
+        id: 'o3',
+        createdAt: DateTime.now(),
+        items: [CartItem(product: fancy, quantity: 1)],
+        paidAmount: 5000,
+      );
+
+      for (final wide in [true, false]) {
+        final bytes = await generateReceiptPdf(
+          order: order,
+          store: store,
+          wide: wide,
+        );
+        expect(bytes, isNotEmpty);
+      }
+
+      final period = ReportPeriod(
+        type: ReportPeriodType.monthly,
+        anchor: DateTime.now(),
+      );
+      final report = await generateReportPdf(store: store, period: period);
+      expect(report, isNotEmpty);
     });
   });
 }

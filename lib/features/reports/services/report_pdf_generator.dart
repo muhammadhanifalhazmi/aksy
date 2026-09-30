@@ -8,6 +8,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../../core/data/app_store.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/utils/print_text_sanitizer.dart';
 import '../../../features/pos/models/product.dart';
 import '../models/report_period.dart';
 
@@ -147,7 +148,7 @@ pw.Widget _buildHeader(ReportPeriod period, AppStore store) {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              settings.name,
+              sanitizePdfText(settings.name),
               style: pw.TextStyle(
                 color: _ink,
                 fontSize: 14,
@@ -156,12 +157,12 @@ pw.Widget _buildHeader(ReportPeriod period, AppStore store) {
             ),
             if (settings.address.isNotEmpty)
               pw.Text(
-                settings.address,
+                sanitizePdfText(settings.address),
                 style: pw.TextStyle(color: _muted, fontSize: 9),
               ),
             if (settings.phone.isNotEmpty)
               pw.Text(
-                settings.phone,
+                sanitizePdfText(settings.phone),
                 style: pw.TextStyle(color: _muted, fontSize: 9),
               ),
           ],
@@ -455,8 +456,16 @@ List<_AggBucket> _buildBuckets(AppStore store, ReportPeriod period) {
 }
 
 pw.Widget _buildCategorySection(List<MapEntry<String, int>> categories) {
-  final total = categories.fold<int>(0, (s, c) => s + c.value);
   final used = categories.take(8).toList();
+  final hiddenCount = categories.length - used.length;
+  final hiddenTotal = categories
+      .skip(8)
+      .fold<int>(0, (s, c) => s + c.value);
+  final slices = <(String, int)>[
+    for (final entry in used) (entry.key, entry.value),
+    if (hiddenCount > 0 && hiddenTotal > 0) ('Lainnya ($hiddenCount kategori)', hiddenTotal),
+  ];
+  final legendTotal = slices.fold<int>(0, (s, c) => s + c.$2);
 
   return pw.Container(
     margin: const pw.EdgeInsets.only(top: 12),
@@ -473,9 +482,9 @@ pw.Widget _buildCategorySection(List<MapEntry<String, int>> categories) {
           child: pw.Chart(
             grid: pw.PieGrid(),
             datasets: [
-              for (var i = 0; i < used.length; i++)
+              for (var i = 0; i < slices.length; i++)
                 pw.PieDataSet(
-                  value: used[i].value.toDouble(),
+                  value: slices[i].$2.toDouble(),
                   color: _palette[i % _palette.length],
                   legendPosition: pw.PieLegendPosition.none,
                 ),
@@ -487,7 +496,7 @@ pw.Widget _buildCategorySection(List<MapEntry<String, int>> categories) {
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              for (var i = 0; i < used.length; i++) ...[
+              for (var i = 0; i < slices.length; i++) ...[
                 pw.Row(
                   children: [
                     pw.Container(
@@ -501,12 +510,12 @@ pw.Widget _buildCategorySection(List<MapEntry<String, int>> categories) {
                     pw.SizedBox(width: 7),
                     pw.Expanded(
                       child: pw.Text(
-                        used[i].key,
+                        sanitizePdfText(slices[i].$1),
                         style: pw.TextStyle(color: _ink, fontSize: 9),
                       ),
                     ),
                     pw.Text(
-                      '${total > 0 ? (used[i].value * 100 / total).toStringAsFixed(0) : 0}%',
+                      '${legendTotal > 0 ? (slices[i].$2 * 100 / legendTotal).toStringAsFixed(0) : 0}%',
                       style: pw.TextStyle(
                         color: _secondary,
                         fontSize: 9,
@@ -515,7 +524,7 @@ pw.Widget _buildCategorySection(List<MapEntry<String, int>> categories) {
                     ),
                     pw.SizedBox(width: 10),
                     pw.Text(
-                      _money(used[i].value),
+                      _money(slices[i].$2),
                       style: pw.TextStyle(color: _ink, fontSize: 9, fontWeight: pw.FontWeight.bold),
                     ),
                   ],
@@ -542,7 +551,7 @@ pw.Widget _buildTopProducts(List<MapEntry<Product, int>> topProducts) {
             children: [
               pw.Expanded(
                 child: pw.Text(
-                  entry.key.name,
+                  sanitizePdfText(entry.key.name),
                   maxLines: 1,
                   style: pw.TextStyle(color: _ink, fontSize: 10),
                 ),

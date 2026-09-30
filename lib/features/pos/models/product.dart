@@ -148,8 +148,14 @@ class Product {
 
   bool isExpiringSoon([int withinDays = 14]) {
     if (expiryDate == null) return false;
-    final diff = expiryDate!.difference(DateTime.now()).inDays;
-    return diff <= withinDays;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final expiry = DateTime(
+      expiryDate!.year,
+      expiryDate!.month,
+      expiryDate!.day,
+    );
+    return !expiry.isAfter(today.add(Duration(days: withinDays)));
   }
 
   Product copyWith({

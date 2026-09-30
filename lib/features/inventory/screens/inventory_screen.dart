@@ -411,6 +411,13 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _expiryDate = p?.expiryDate;
     _icon = p?.icon ?? ProductIcons.fallback;
     _imagePath = p?.imagePath;
+    _wholesalePrice.addListener(_refreshWholesalePreview);
+    _minWholesaleQty.addListener(_refreshWholesalePreview);
+  }
+
+  void _refreshWholesalePreview() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -424,6 +431,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _barcode.dispose();
     _stock.dispose();
     _batchNumber.dispose();
+    _wholesalePrice.removeListener(_refreshWholesalePreview);
+    _minWholesaleQty.removeListener(_refreshWholesalePreview);
     super.dispose();
   }
 
@@ -481,11 +490,22 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
         : int.tryParse(_minWholesaleQty.text.trim());
     final validWholesale =
         (intended == null && minQty == null) ||
-        (intended != null && minQty != null);
+        (intended != null && minQty != null && intended > 0 && minQty > 0);
     if (!validWholesale) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Harga grosir dan minimal qty harus diisi bersamaan'),
+          content: Text(
+            'Harga grosir dan minimal qty harus diisi bersamaan dan lebih dari 0',
+          ),
+        ),
+      );
+      return;
+    }
+    final retailPrice = int.parse(_price.text.trim());
+    if (intended != null && intended >= retailPrice) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Harga grosir harus lebih kecil dari harga jual'),
         ),
       );
       return;
@@ -651,7 +671,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                     child: Text(
                       'Grosir aktif: pembeli otomatis kena harga '
                       '${CurrencyFormatter.formatIDR(int.parse(_wholesalePrice.text))} '
-                      'saat qty >= ${_minWholesaleQty.text}',
+                      'saat qty >= ${_minWholesaleQty.text.isEmpty ? '?' : _minWholesaleQty.text}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w600,
@@ -668,9 +688,11 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                         ],
-                        decoration: const InputDecoration(
-                          labelText: 'Stok awal',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: widget.product == null
+                              ? 'Stok awal'
+                              : 'Stok',
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                     ),
@@ -678,12 +700,16 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                     Expanded(
                       child: TextFormField(
                         controller: _barcode,
-                        keyboardType: TextInputType.number,
+                        textCapitalization: TextCapitalization.none,
+                        autocorrect: false,
                         inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
+                          FilteringTextInputFormatter.allow(
+                            RegExp('[a-zA-Z0-9]'),
+                          ),
                         ],
                         decoration: const InputDecoration(
                           labelText: 'Barcode',
+                          helperText: 'Angka atau huruf',
                           border: OutlineInputBorder(),
                         ),
                       ),

@@ -11,6 +11,7 @@ import '../../../core/widgets/barcode_scanner_screen.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../printer/services/print_receipt_action.dart';
 import '../models/cart_item.dart';
+import '../models/order.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import 'receipt_preview_dialog.dart';
@@ -854,233 +855,281 @@ Future<void> _showPaymentDialog(
   CartProvider cart,
   AppStore store,
 ) async {
-  final screenContext = context;
-  final cashController = TextEditingController(text: '${cart.subtotal}');
-  final discountController = TextEditingController();
-  final focusNode = FocusNode();
-  var cash = cart.subtotal;
-  var discount = 0;
+  final order = await showDialog<Order>(
+    context: context,
+    builder: (_) => _PaymentDialog(cart: cart, store: store),
+  );
+  if (order == null || !context.mounted) return;
 
-  Future<void> close() async {
-    focusNode.dispose();
-    cashController.dispose();
-    discountController.dispose();
-    Navigator.of(screenContext).pop();
+  if (order.change > 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Kembalian ${CurrencyFormatter.formatIDR(order.change)}'),
+      ),
+    );
+  }
+  if (!context.mounted) return;
+  if (store.printer.autoPrint) {
+    if (!store.printer.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cetak otomatis aktif tapi printer belum dipilih. '
+            'Buka menu Printer Termal.',
+          ),
+        ),
+      );
+    } else {
+      try {
+        final outcome = await printReceipt(
+          context: context,
+          store: store,
+          order: order,
+        );
+        if (!context.mounted) return;
+        if (outcome.printed) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Struk dicetak ke ${store.printer.deviceName}',
+              ),
+            ),
+          );
+        } else if (outcome.status == PrintStatus.failed) {
+          await showPrintFailureDialog(
+            context,
+            message: outcome.message,
+            onRetry: () => printReceiptManually(
+              context: context,
+              store: store,
+              order: order,
+            ),
+          );
+        }
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mencetak struk: $error')),
+        );
+      }
+    }
+  }
+  if (context.mounted) {
+    await showReceiptPreview(context, order: order, store: store);
+  }
+}
+
+class _PaymentDialog extends StatefulWidget {
+  const _PaymentDialog({required this.cart, required this.store});
+
+  final CartProvider cart;
+  final AppStore store;
+
+  @override
+  State<_PaymentDialog> createState() => _PaymentDialogState();
+}
+
+class _PaymentDialogState extends State<_PaymentDialog> {
+  late final TextEditingController _cashController;
+  late final TextEditingController _discountController;
+  final FocusNode _focusNode = FocusNode();
+
+  late int _cash;
+  int _discount = 0;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cash = widget.cart.subtotal;
+    _cashController = TextEditingController(text: '$_cash');
+    _discountController = TextEditingController();
   }
 
-  await showDialog<void>(
-    context: context,
-    builder: (dialogContext) {
-      final theme = Theme.of(dialogContext);
-      final total = cart.subtotal - discount;
-      final difference = cash - total;
-      final isEnough = difference >= 0 && cash > 0;
-      return StatefulBuilder(
-        builder: (context, setDialogState) {
-          return SafeArea(
-            child: Dialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _cashController.dispose();
+    _discountController.dispose();
+    super.dispose();
+  }
+
+  int get _subtotal => widget.cart.subtotal;
+
+  int get _maxDiscount => _subtotal;
+
+  int get _total => _subtotal - _discount;
+
+  int get _difference => _cash - _total;
+
+  bool get _isEnough => _difference >= 0 && _cash > 0;
+
+  void _setCash(int value) {
+    setState(() {
+      _cash = value;
+      _cashController.text = '$value';
+    });
+  }
+
+  Future<void> _pay() async {
+    if (_busy) return;
+    final store = widget.store;
+    final missing = widget.cart.items
+        .where((item) => store.productById(item.product.id) == null)
+        .length;
+    if (missing > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Ada $missing produk di keranjang yang sudah tidak tersedia. '
+            'Muat ulang kasir sebelum membayar.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() => _busy = true);
+    final order = widget.cart.submitOrder(
+      _cash,
+      store,
+      discount: _discount,
+    );
+    if (!mounted) return;
+    Navigator.of(context).pop(order);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final total = _total;
+    final difference = _difference;
+    final isEnough = _isEnough;
+    return SafeArea(
+      child: Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Pembayaran',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Total tagihan ${CurrencyFormatter.formatIDR(total)}'
+                  '${_discount > 0 ? ' (diskon ${CurrencyFormatter.formatIDR(_discount)})' : ''}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _cashController,
+                  focusNode: _focusNode,
+                  autofocus: !_busy,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (value) =>
+                      setState(() => _cash = int.tryParse(value) ?? 0),
+                  decoration: const InputDecoration(
+                    labelText: 'Uang diterima',
+                    prefixText: 'Rp ',
+                    border: OutlineInputBorder(),
+                    helperText: 'Tekan angka di bawah untuk isi cepat',
+                    helperMaxLines: 1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _discountController,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (value) => setState(() {
+                    final typed = int.tryParse(value) ?? 0;
+                    _discount = typed > _maxDiscount ? _maxDiscount : typed;
+                    if (typed > _maxDiscount) {
+                      _discountController.text = '$_maxDiscount';
+                      _discountController.selection =
+                          TextSelection.collapsed(offset: '$_maxDiscount'.length);
+                    }
+                  }),
+                  decoration: InputDecoration(
+                    labelText: 'Diskon (Rp)',
+                    prefixText: 'Rp ',
+                    helperText: 'Maksimal ${CurrencyFormatter.formatIDR(_maxDiscount)}',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ActionChip(
+                      label: const Text('Uang Pas'),
+                      onPressed: _busy ? null : () => _setCash(total),
+                    ),
+                    for (final amount in const [20000, 50000, 100000])
+                      ActionChip(
+                        label: Text(CurrencyFormatter.formatIDR(amount)),
+                        onPressed: _busy ? null : () => _setCash(amount),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                     Text(
-                      'Pembayaran',
-                      style: theme.textTheme.titleLarge?.copyWith(
+                      isEnough ? 'Kembalian' : 'Kurang',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      CurrencyFormatter.formatIDR(difference.abs()),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: isEnough
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.error,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Total tagihan ${CurrencyFormatter.formatIDR(total)}'
-                      '${discount > 0 ? ' (diskon ${CurrencyFormatter.formatIDR(discount)})' : ''}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: const Text('Batal'),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: cashController,
-                      focusNode: focusNode,
-                      autofocus: true,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
-                      onChanged: (value) => setDialogState(
-                        () => cash = int.tryParse(value) ?? 0,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        onPressed: (isEnough && !_busy) ? _pay : null,
+                        child: Text(_busy ? 'Memproses...' : 'Bayar'),
                       ),
-                      decoration: InputDecoration(
-                        labelText: 'Uang diterima',
-                        prefixText: 'Rp ',
-                        border: const OutlineInputBorder(),
-                        helperText: 'Tekan angka di bawah untuk isi cepat',
-                        helperMaxLines: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: discountController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
-                      onChanged: (value) => setDialogState(
-                        () => discount = int.tryParse(value) ?? 0,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Diskon (Rp)',
-                        prefixText: 'Rp ',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ActionChip(
-                          label: const Text('Uang Pas'),
-                          onPressed: () {
-                            cash = total;
-                            cashController.text = '$cash';
-                            setDialogState(() {});
-                          },
-                        ),
-                        for (final amount in const [20000, 50000, 100000])
-                          ActionChip(
-                            label: Text(CurrencyFormatter.formatIDR(amount)),
-                            onPressed: () {
-                              cash = amount;
-                              cashController.text = '$amount';
-                              setDialogState(() {});
-                            },
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          isEnough ? 'Kembalian' : 'Kurang',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          CurrencyFormatter.formatIDR(difference.abs()),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: isEnough
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.error,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: close,
-                            child: const Text('Batal'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: FilledButton(
-                            onPressed: isEnough && cash >= total
-                                ? () async {
-                                    final order = cart.submitOrder(
-                                      cash,
-                                      store,
-                                      discount: discount,
-                                    );
-                                    await close();
-                                    if (!screenContext.mounted) return;
-                                    if (order.change > 0) {
-                                      ScaffoldMessenger.of(screenContext)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Kembalian ${CurrencyFormatter.formatIDR(order.change)}',
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    if (!screenContext.mounted) return;
-                                    if (store.printer.autoPrint) {
-                                      if (!store.printer.isConfigured) {
-                                        ScaffoldMessenger.of(screenContext)
-                                            .showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Cetak otomatis aktif tapi '
-                                                  'printer belum dipilih. Buka '
-                                                  'menu Printer Termal.',
-                                                ),
-                                              ),
-                                            );
-                                      } else {
-                                        final printed =
-                                            await printReceiptSilently(
-                                              context: screenContext,
-                                              store: store,
-                                              order: order,
-                                            );
-                                        if (!screenContext.mounted) return;
-                                        if (printed) {
-                                          ScaffoldMessenger.of(screenContext)
-                                              .showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    'Struk dicetak ke '
-                                                    '${store.printer.deviceName}',
-                                                  ),
-                                                ),
-                                              );
-                                        } else {
-                                          await showPrintFailureDialog(
-                                            screenContext,
-                                            message:
-                                                'Printer tidak merespons saat '
-                                                'mencetak.',
-                                            onRetry: () => printReceiptManually(
-                                              context: screenContext,
-                                              store: store,
-                                              order: order,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    }
-                                    if (screenContext.mounted) {
-                                      await showReceiptPreview(
-                                        screenContext,
-                                        order: order,
-                                        store: store,
-                                      );
-                                    }
-                                  }
-                                : null,
-                            child: const Text('Bayar'),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
           ),
-        );
-        },
-      );
-    },
-  );
+        ),
+      ),
+    );
+  }
 }

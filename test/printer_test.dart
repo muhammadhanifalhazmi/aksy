@@ -57,7 +57,9 @@ void main() {
           cols: cols,
         );
         for (final line in lines) {
-          expect(line.text.length, lessThanOrEqualTo(cols));
+          for (final part in line.text.split('\n')) {
+            expect(part.length, lessThanOrEqualTo(cols));
+          }
         }
       }
     });
@@ -68,14 +70,71 @@ void main() {
       expect(result.length, 32);
     });
 
-    test('pairColumns drops the right value when there is no room', () {
+    test('pairColumns keeps the right value on its own line when tight', () {
       final result = pairColumns(
         'left value that is very long indeed',
         'Rp 9.000',
         10,
       );
-      expect(result.length, lessThanOrEqualTo(10));
-      expect(result, 'left va...');
+      final parts = result.split('\n');
+      expect(parts, hasLength(2));
+      expect(parts.first.length, lessThanOrEqualTo(10));
+      expect(parts.last.trim(), 'Rp 9.000');
+    });
+
+    test('pairColumns never drops the amount on a 58mm receipt', () {
+      final order = Order(
+        id: 'TRX2',
+        createdAt: DateTime(2026, 3, 10),
+        items: [
+          CartItem(
+            product: Product(
+              id: 'p3',
+              name: 'Paket Hemat',
+              price: 1500000,
+              category: 'Paket',
+              icon: Icons.local_drink,
+              stock: 10,
+              wholesalePrice: 1500000,
+              minWholesaleQty: 2,
+            ),
+            quantity: 2,
+          ),
+        ],
+        paidAmount: 3000000,
+      );
+      final lines = buildReceiptLines(
+        order: order,
+        store: AppStore(products: [order.items.first.product]),
+        cols: receiptColumns(wide: false),
+      );
+      final text = lines.map((l) => l.text).join('\n');
+      expect(text, contains('Rp 3.000.000'));
+    });
+
+    test('discount row is hidden when there is no discount', () {
+      final order = Order(
+        id: 'TRX3',
+        createdAt: DateTime(2026, 3, 10),
+        items: [CartItem(product: drink, quantity: 1)],
+        paidAmount: 5000,
+      );
+      final lines = buildReceiptLines(
+        order: order,
+        store: AppStore(products: [drink]),
+        cols: 32,
+      );
+      expect(lines.any((l) => l.text.startsWith('Diskon')), isFalse);
+
+      final withDiscount = buildReceiptLines(
+        order: buildOrder(),
+        store: AppStore(products: [drink]),
+        cols: 32,
+      );
+      expect(
+        withDiscount.any((l) => l.text.contains('Diskon')),
+        isTrue,
+      );
     });
 
     test('fitToWidth truncates with an ellipsis', () {
@@ -104,8 +163,24 @@ void main() {
       expect(bytes.length, 8);
     });
 
-    test('encodeText maps runes above latin-1 to a question mark', () {
-      expect(EscPosBuilder.encodeText('a\u00e9\u4e2d'), [0x61, 0xE9, 0x3F]);
+    test('encodeText transliterates accents and drops non-ascii runes', () {
+      expect(EscPosBuilder.encodeText('a\u00e9\u4e2d'), [0x61, 0x65, 0x3F]);
+      expect(EscPosBuilder.encodeText('Kedai \u2014 Kopi\u2019s'), [
+        0x4B,
+        0x65,
+        0x64,
+        0x61,
+        0x69,
+        0x20,
+        0x2D,
+        0x20,
+        0x4B,
+        0x6F,
+        0x70,
+        0x69,
+        0x27,
+        0x73,
+      ]);
     });
 
     test('every generated line ends with a line feed', () {

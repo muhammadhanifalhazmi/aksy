@@ -65,42 +65,44 @@ class AppStore extends ChangeNotifier {
   }
 
   void _restore(SharedPreferences prefs) {
-    List<dynamic> decode(String key) {
+    List<T> decodeList<T>(
+      String key,
+      T Function(Map<String, dynamic>) fromJson,
+    ) {
       final raw = prefs.getString(key);
-      if (raw == null || raw.isEmpty) return const [];
-      return jsonDecode(raw) as List<dynamic>;
+      if (raw == null || raw.isEmpty) return <T>[];
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! List) return <T>[];
+        final result = <T>[];
+        for (final item in decoded) {
+          if (item is! Map) continue;
+          try {
+            result.add(fromJson(item.cast<String, dynamic>()));
+          } catch (_) {
+            continue;
+          }
+        }
+        return result;
+      } catch (_) {
+        return <T>[];
+      }
     }
 
-    _products.addAll(
-      decode(
-        _kProducts,
-      ).map((e) => Product.fromJson(e as Map<String, dynamic>)).toList(),
-    );
-    _orders.addAll(
-      decode(
-        _kOrders,
-      ).map((e) => Order.fromJson(e as Map<String, dynamic>)).toList(),
-    );
-    _cashEntries.addAll(
-      decode(
-        _kCashEntries,
-      ).map((e) => CashEntry.fromJson(e as Map<String, dynamic>)).toList(),
-    );
-    _debts.addAll(
-      decode(
-        _kDebts,
-      ).map((e) => Debt.fromJson(e as Map<String, dynamic>)).toList(),
-    );
-    _shifts.addAll(
-      decode(
-        _kShifts,
-      ).map((e) => ShiftRecord.fromJson(e as Map<String, dynamic>)).toList(),
-    );
+    _products.addAll(decodeList(_kProducts, Product.fromJson));
+    _orders.addAll(decodeList(_kOrders, Order.fromJson));
+    _cashEntries.addAll(decodeList(_kCashEntries, CashEntry.fromJson));
+    _debts.addAll(decodeList(_kDebts, Debt.fromJson));
+    _shifts.addAll(decodeList(_kShifts, ShiftRecord.fromJson));
     final activeRaw = prefs.getString(_kActiveShift);
     if (activeRaw != null && activeRaw.isNotEmpty) {
-      _activeShift = ShiftRecord.fromJson(
-        jsonDecode(activeRaw) as Map<String, dynamic>,
-      );
+      try {
+        _activeShift = ShiftRecord.fromJson(
+          (jsonDecode(activeRaw) as Map).cast<String, dynamic>(),
+        );
+      } catch (_) {
+        _activeShift = null;
+      }
     }
     final settingsRaw = prefs.getString(_kSettings);
     if (settingsRaw != null && settingsRaw.isNotEmpty) {
@@ -168,9 +170,11 @@ class AppStore extends ChangeNotifier {
   }
 
   Product? productByBarcode(String barcode) {
-    final trimmed = barcode.trim();
+    final trimmed = barcode.trim().toLowerCase();
+    if (trimmed.isEmpty) return null;
     for (final product in _products) {
-      if (product.barcode != null && product.barcode == trimmed) return product;
+      final code = product.barcode?.trim().toLowerCase();
+      if (code != null && code.isNotEmpty && code == trimmed) return product;
     }
     return null;
   }
@@ -283,24 +287,21 @@ class AppStore extends ChangeNotifier {
   }
 
   List<MapEntry<Product, int>> topProductsOn(DateTime day, {int limit = 5}) {
-    final totals = <String, int>{};
+    final totals = <String, (Product, int)>{};
     for (final order in ordersOn(day)) {
       for (final item in order.items) {
-        totals.update(
-          item.product.id,
-          (value) => value + item.quantity,
-          ifAbsent: () => item.quantity,
+        final current = totals[item.product.id];
+        totals[item.product.id] = (
+          current?.$1 ?? item.product,
+          (current?.$2 ?? 0) + item.quantity,
         );
       }
     }
     final sorted = totals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final result = <MapEntry<Product, int>>[];
-    for (final entry in sorted.take(limit)) {
-      final product = productById(entry.key);
-      if (product != null) result.add(MapEntry(product, entry.value));
-    }
-    return result;
+      ..sort((a, b) => b.value.$2.compareTo(a.value.$2));
+    return [
+      for (final entry in sorted.take(limit)) MapEntry(entry.value.$1, entry.value.$2),
+    ];
   }
 
   List<Order> ordersBetween(DateTime start, DateTime endExclusive) {
@@ -368,24 +369,21 @@ class AppStore extends ChangeNotifier {
     DateTime endExclusive, {
     int limit = 10,
   }) {
-    final totals = <String, int>{};
+    final totals = <String, (Product, int)>{};
     for (final order in ordersBetween(start, endExclusive)) {
       for (final item in order.items) {
-        totals.update(
-          item.product.id,
-          (value) => value + item.quantity,
-          ifAbsent: () => item.quantity,
+        final current = totals[item.product.id];
+        totals[item.product.id] = (
+          current?.$1 ?? item.product,
+          (current?.$2 ?? 0) + item.quantity,
         );
       }
     }
     final sorted = totals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final result = <MapEntry<Product, int>>[];
-    for (final entry in sorted.take(limit)) {
-      final product = productById(entry.key);
-      if (product != null) result.add(MapEntry(product, entry.value));
-    }
-    return result;
+      ..sort((a, b) => b.value.$2.compareTo(a.value.$2));
+    return [
+      for (final entry in sorted.take(limit)) MapEntry(entry.value.$1, entry.value.$2),
+    ];
   }
 
   List<MapEntry<String, int>> categoryRevenueBetween(
@@ -486,6 +484,8 @@ class AppStore extends ChangeNotifier {
   }
 
   ShiftRecord openShift(int startingCash) {
+    final active = _activeShift;
+    if (active != null) return active;
     final shift = ShiftRecord(
       id: 'SFT${DateTime.now().millisecondsSinceEpoch}',
       openTime: DateTime.now(),
@@ -503,6 +503,21 @@ class AppStore extends ChangeNotifier {
         .fold(0, (sum, o) => sum + o.total);
   }
 
+  int netCashMovementSince(DateTime since) {
+    var total = 0;
+    for (final entry in _cashEntries) {
+      if (entry.createdAt.isBefore(since)) continue;
+      total += entry.type == CashFlowType.cashIn
+          ? entry.amount
+          : -entry.amount;
+    }
+    return total;
+  }
+
+  int expectedCashForShift(ShiftRecord shift) {
+    return shift.startingCash + netCashMovementSince(shift.openTime);
+  }
+
   List<Order> currentShiftSales() {
     final shift = _activeShift;
     if (shift == null) return const [];
@@ -512,8 +527,7 @@ class AppStore extends ChangeNotifier {
   ShiftRecord? closeShift(int actualCash, {String? note}) {
     final shift = _activeShift;
     if (shift == null) return null;
-    final sales = totalSalesSince(shift.openTime);
-    final expected = shift.startingCash + sales;
+    final expected = expectedCashForShift(shift);
     final closed = ShiftRecord(
       id: shift.id,
       openTime: shift.openTime,
@@ -553,6 +567,10 @@ class AppStore extends ChangeNotifier {
     } catch (_) {
       return false;
     }
+    final version = data['version'];
+    if (version is! int || version < 1 || version > _backupVersion) return false;
+    final hasKnownKey = _backupKeys.any(data.containsKey);
+    if (!hasKnownKey) return false;
     try {
       final products = _decodeList(data['products'], Product.fromJson);
       final orders = _decodeList(data['orders'], Order.fromJson);
@@ -604,6 +622,17 @@ class AppStore extends ChangeNotifier {
         .toList();
   }
 }
+
+const _backupKeys = <String>[
+  'products',
+  'orders',
+  'cashEntries',
+  'debts',
+  'shifts',
+  'settings',
+  'printer',
+  'activeShift',
+];
 
 class DailyAggregate {
   const DailyAggregate({

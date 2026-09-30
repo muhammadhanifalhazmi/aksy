@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/data/app_store.dart';
@@ -5,7 +6,7 @@ import '../../pos/models/order.dart';
 import '../models/bluetooth_printer_device.dart';
 import '../services/thermal_printer_service.dart';
 
-Future<bool> printReceiptSilently({
+Future<PrintOutcome> printReceipt({
   required BuildContext context,
   required AppStore store,
   required Order order,
@@ -13,25 +14,67 @@ Future<bool> printReceiptSilently({
 }) async {
   final printer = service ?? ThermalPrinterService();
   if (!printer.isSupported) {
-    debugPrint('print: platform tidak mendukung printer');
-    return false;
+    _log('platform tidak mendukung printer');
+    return const PrintOutcome.unsupported();
   }
   final settings = store.printer;
   if (!settings.isConfigured) {
-    debugPrint('print: dilewati, printer belum dipilih');
-    return false;
+    _log('dilewati, printer belum dipilih');
+    return const PrintOutcome.notConfigured();
   }
-  debugPrint(
-    'print: kirim struk ${order.id} ke ${settings.deviceName} (${settings.deviceAddress})',
-  );
+  _log('kirim struk ke ${settings.deviceName}');
   try {
     await printer.printReceipt(settings: settings, store: store, order: order);
-    debugPrint('print: struk ${order.id} terkirim');
-    return true;
+    _log('struk ${order.id} terkirim');
+    return const PrintOutcome.success();
   } on PrinterException catch (error) {
-    debugPrint('print: struk ${order.id} gagal -> ${error.message}');
-    return false;
+    _log('struk ${order.id} gagal -> ${error.message}');
+    return PrintOutcome.failure(error.message);
   }
+}
+
+void _log(String message) {
+  if (kDebugMode) debugPrint('print: $message');
+}
+
+Future<bool> printReceiptSilently({
+  required BuildContext context,
+  required AppStore store,
+  required Order order,
+  ThermalPrinterService? service,
+}) async {
+  final outcome = await printReceipt(
+    context: context,
+    store: store,
+    order: order,
+    service: service,
+  );
+  return outcome.printed;
+}
+
+enum PrintStatus { printed, failed, unsupported, notConfigured }
+
+class PrintOutcome {
+  const PrintOutcome._(this.status, [this.message = '']);
+
+  const PrintOutcome.success() : this._(PrintStatus.printed);
+
+  const PrintOutcome.failure(String message)
+    : this._(PrintStatus.failed, message);
+
+  const PrintOutcome.unsupported()
+    : this._(PrintStatus.unsupported, 'Printer Bluetooth hanya tersedia di Android');
+
+  const PrintOutcome.notConfigured()
+    : this._(
+        PrintStatus.notConfigured,
+        'Belum ada printer yang dipilih di menu Printer Termal',
+      );
+
+  final PrintStatus status;
+  final String message;
+
+  bool get printed => status == PrintStatus.printed;
 }
 
 Future<void> printReceiptManually({

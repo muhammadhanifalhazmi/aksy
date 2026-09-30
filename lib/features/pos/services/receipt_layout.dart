@@ -41,10 +41,14 @@ List<ReceiptLine> buildReceiptLines({
     lines.add(ReceiptLine('-' * cols, align: ReceiptAlign.center));
   }
 
+  void blank() {
+    lines.add(const ReceiptLine('', align: ReceiptAlign.center));
+  }
+
   center(settings.name, bold: true);
   center(settings.address);
   center(settings.phone);
-  center('');
+  blank();
   row('No. ${order.id}', shift?.id ?? '');
   row('Tgl', DateFormatter.when(order.createdAt));
   divider();
@@ -58,7 +62,9 @@ List<ReceiptLine> buildReceiptLines({
   }
   divider();
   row('Subtotal', CurrencyFormatter.formatIDR(order.itemsTotal));
-  row('Diskon', CurrencyFormatter.formatIDR(order.discount));
+  if (order.discount > 0) {
+    row('Diskon', '-${CurrencyFormatter.formatIDR(order.discount)}');
+  }
   row('TOTAL', CurrencyFormatter.formatIDR(order.total), bold: true);
   divider();
   row('Tunai', CurrencyFormatter.formatIDR(order.paidAmount));
@@ -85,9 +91,14 @@ String fitToWidth(String text, int cols) {
 }
 
 String pairColumns(String left, String right, int cols) {
-  final leftFitted = fitToWidth(left, cols);
   final rightFitted = fitToWidth(right, cols);
-  final gap = cols - leftFitted.length - rightFitted.length;
-  if (gap >= 1) return '$leftFitted${' ' * gap}$rightFitted';
-  return leftFitted;
+  final leftFull = fitToWidth(left, cols);
+  final leftBudget = cols - rightFitted.length - 1;
+  if (leftBudget >= 3) {
+    final leftFitted = fitToWidth(left, leftBudget);
+    final gap = cols - leftFitted.length - rightFitted.length;
+    if (gap >= 1) return '$leftFitted${' ' * gap}$rightFitted';
+  }
+  final padding = cols - rightFitted.length;
+  return '$leftFull\n${' ' * (padding < 0 ? 0 : padding)}$rightFitted';
 }

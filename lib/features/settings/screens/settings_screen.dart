@@ -72,18 +72,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _exportBackup() async {
     if (_busy) return;
     setState(() => _busy = true);
+    File? temp;
     try {
       final store = AppScope.of(context);
       final dir = await getTemporaryDirectory();
       final stamp = DateTime.now()
           .toIso8601String()
           .replaceAll(RegExp(r'[:.]'), '-');
-      final file = File('${dir.path}/aksy-backup-$stamp.json');
-      await file.writeAsString(store.exportBackupJson());
+      temp = File('${dir.path}/aksy-backup-$stamp.json');
+      await temp.writeAsString(store.exportBackupJson());
       if (!mounted) return;
       await SharePlus.instance.share(
         ShareParams(
-          files: [XFile(file.path, mimeType: 'application/json')],
+          files: [XFile(temp.path, mimeType: 'application/json')],
           text: 'Backup data Aplikasi Kasir Easy',
         ),
       );
@@ -93,6 +94,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SnackBar(content: Text('Gagal membuat backup')),
       );
     } finally {
+      final leftover = temp;
+      if (leftover != null && await leftover.exists()) {
+        try {
+          await leftover.delete();
+        } catch (_) {}
+      }
       if (mounted) setState(() => _busy = false);
     }
   }
