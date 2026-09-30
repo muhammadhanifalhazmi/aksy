@@ -63,6 +63,8 @@ class _GuideScreenState extends State<GuideScreen> {
               children: [
                 const _IntroCard(),
                 const SizedBox(height: 16),
+                const _DataSafetyCard(),
+                const SizedBox(height: 16),
                 const SectionHeader(title: 'Mulai Cepat'),
                 const SizedBox(height: 8),
                 const _QuickStartCard(),
@@ -318,7 +320,11 @@ class _GuideSection {
             'Seluruh data saat ini akan digantikan isi file tersebut.',
       ],
       tips: [
-        'Lakukan cadangan berkala, misalnya setiap akhir minggu.',
+        'Lakukan backup berkala, misalnya setiap akhir minggu.',
+        'Backup rutin WAJIB dilakukan: uninstall aplikasi atau perangkat hilang '
+            'berarti semua data toko hilang permanen.',
+        'Simpan file backup di luar HP (Drive/email), jangan hanya di memori '
+            'perangkat yang sama.',
         'Perubahan identitas toko langsung berlaku pada struk dan laporan '
             'berikutnya.',
       ],
@@ -549,6 +555,99 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _DataSafetyCard extends StatelessWidget {
+  const _DataSafetyCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.errorContainer.withValues(alpha: 0.4),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Penting: Backup Data secara Berkala',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Seluruh data toko (produk, stok, transaksi, utang, kas, dan '
+              'riwayat shift) tersimpan di dalam aplikasi pada perangkat ini '
+              'saja. Kalau aplikasi di uninstall, dihapus dari layar utama, '
+              'dijual, atau perangkatnya hilang, maka SEMUA data toko ikut '
+              'hilang dan tidak dapat dikembalikan.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Untuk Diamankan:',
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final tip in const [
+              'Lakukan backup data secara berkala, misalnya setiap akhir hari '
+                  'atau setiap akhir minggu.',
+              'Backup lewat menu Pengaturan > "Cadangkan Data", lalu simpan '
+                  'file .json ke Drive, WhatsApp, atau email.',
+              'Simpan file backup di tempat terpisah dari HP, jangan hanya di '
+                  'folder unduhan HP yang sama.',
+              'Backup juga berguna untuk pindah ke HP baru atau saat aplikasi '
+                  'mengganggu / error.',
+            ]) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, right: 8),
+                    child: Icon(
+                      Icons.check_circle_outline,
+                      size: 15,
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      tip,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _FaqCard extends StatelessWidget {
   const _FaqCard();
 
@@ -557,6 +656,15 @@ class _FaqCard extends StatelessWidget {
       'Apakah data aman?',
       'Semua data tersimpan otomatis di perangkat secara offline. '
           'Tidak memerlukan koneksi internet untuk menjalankan aplikasi.',
+    ),
+    (
+      'Kenapa data saya hilang setelah aplikasi dihapus?',
+      'Data toko hanya tersimpan di dalam aplikasi pada perangkat ini, tanpa '
+          'server. Uninstall, hapus dari layar utama, atau ganti perangkat = '
+          'data hilang permanen. Setelah menghapus aplikasi, chace data '
+          'juga ikut terhapus sehingga aplikasi tidak bisa membaca data lama '
+          'lagi.Selalu backup berkala lewat Pengaturan > "Cadangkan Data" '
+          'sebelum menghapus aplikasi.',
     ),
     (
       'Mengapa stok berubah otomatis?',

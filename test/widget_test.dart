@@ -138,6 +138,53 @@ void main() {
     });
   });
 
+  group('tablet layout', () {
+    // 800 x 1280 ~= tablet 7" portrait (TabletSize.iPadPortrait). Memastikan
+    // tidak ada RenderFlex overflow saat aplikasi dibuka di tablet.
+    testWidgets('opens every main screen on a tablet without overflow', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 1280);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final store = AppStore(products: [
+        Product(
+          id: 'p1',
+          name: 'Es Teh Manis',
+          price: 5000,
+          category: 'Minuman',
+          icon: Icons.local_drink,
+          stock: 20,
+          costPrice: 2500,
+        ),
+      ]);
+
+      for (final label in const [
+        'POS',
+        'Inventori',
+        'Kas Masuk / Keluar',
+        'Hutang & Piutang',
+        'Shift Kasir',
+        'Laporan',
+        'Printer Termal',
+        'Pengaturan',
+        'Panduan',
+      ]) {
+        await _pumpApp(tester, store: store);
+        await tester.pumpAndSettle();
+        await _openDestination(tester, label);
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'halaman "$label" meluber di layar tablet',
+        );
+        expect(find.byType(AppShellScreen), findsOneWidget);
+      }
+    });
+  });
+
   group('DebtScreen', () {
     testWidgets('a debt record can be edited from the card menu', (
       tester,
